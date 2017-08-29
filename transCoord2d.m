@@ -3,7 +3,7 @@ function coord_out = transCoord2d(coord_in,tform,trans_type)
 %  coord_in - input coordinates (n x 2)
 %  tform - transformation structure for L system defined in G system, 
 %          created by defineSystem2d
-%  trans_type - type of tranformation ('global to local' or 
+%  trans_type - type of transformation ('global to local' or 
 %               'local to global')
 %
 % Code developed by McHenryLab at UC Irvine

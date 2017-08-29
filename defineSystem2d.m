@@ -1,7 +1,7 @@
 function tform = defineSystem2d(origin,axCoord,axType)
 % Defines coordinate local system (L) within global system (G)
-%    origin  - a vector of coordinates (2 or 3) that define origin L in G
-%    axCoord - a vector of coordinates (2 or 3) defining an axis for L in G
+%    origin  - a vector of 2 coordinates that define origin L in G
+%    axCoord - a vector of 2 coordinates defining an axis for L in G
 %    axType  - defines which axis of L given by axVect ('x' or 'y')
 %
 % Code developed by McHenryLab at UC Irvine
