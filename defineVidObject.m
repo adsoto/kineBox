@@ -41,7 +41,7 @@ if isdir(vid_path)
     end    
     
     % Loop thru files
-    for i = 1:length(dir)
+    for i = 1:length(a)
         
         % Get filename
         fName = a(i).name;

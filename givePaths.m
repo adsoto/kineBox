@@ -4,13 +4,15 @@ function paths = givePaths(rootPath)
 % If running on Matt's laptop . . .
 if nargin<1 && ~ispc && ~isempty(dir('/Users/mmchenry/Documents/Matlab code'))
     % Define root in Matt's folder
-    rootPath = '/Users/mmchenry/';
+    rootPath = '/Users/mmchenry';
+    
+    paths.vid_root = [rootPath '/Documents/Projects/kineBox'];
 end
 
 %TODO: Add your own default, like done above and modify below to match
 % your directory strcuture
 
 % Path to sample videos in Google Drive 
-paths.vid_root = [rootPath filesep 'Google Drive' filesep 'Projects' filesep 'kineBox'];
+%paths.vid_root = [rootPath filesep 'Google Drive' filesep 'Projects' filesep 'kineBox'];
 
 

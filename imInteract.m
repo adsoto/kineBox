@@ -82,10 +82,21 @@ if strcmp(action,'threshold and selection')
         delete(h)       
     end
     
+    props = regionprops(bw,'Centroid','Area',...
+                        'MajorAxisLength','MinorAxisLength');
+    
+    % Check               
+    if length(props)>1    
+        error('More than one object selected');
+        
+    elseif isempty(props)
+        error('No object selected');
+    end
+                    
     % Function outputs
     varargout{1} = tVal;
-    varargout{2} = xPos;
-    varargout{3} = yPos;
+    varargout{2} = props.Centroid(1);
+    varargout{3} = props.Centroid(2);
     
 else
     error('requested action not recognized');
