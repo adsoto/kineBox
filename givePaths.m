@@ -6,7 +6,9 @@ if nargin<1 && ~ispc && ~isempty(dir('/Users/mmchenry/Documents/Matlab code'))
     % Define root in Matt's folder
     rootPath = '/Users/mmchenry';
     
-    paths.vid_root = [rootPath '/Documents/Projects/kineBox'];
+    paths.vid_root = [rootPath '/Documents/Projects/kineBox/video'];
+    
+    paths.data_root = [rootPath '/Documents/Projects/kineBox/data_seastars'];
 end
 
 %TODO: Add your own default, like done above and modify below to match

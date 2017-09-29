@@ -3,7 +3,13 @@ function example_starjuv
 %% Parameters
 
 % Factor by which the blob diameter gets multiplied for roi
-blobMultiple = 1.3;
+blobMultiple = 1.5;
+
+% Whether to make a video of the data
+makeVid = 1;
+
+% Re-run whole analysis
+forceReRun = 1;
 
 
 %% Preliminaries
@@ -11,16 +17,78 @@ blobMultiple = 1.3;
 % Extract root directories
 paths = givePaths;
 
-% Sample for analysis
-vid_path = [paths.vid_root filesep 'Seastars' filesep 'CSULB juvenile' ...
+% Particular sequence being analyzed
+path_seq = ['CSULB juvenile' ...
     filesep 'SS18' filesep 'timelapse7'];
-        
+
+% Sample for analysis
+path_vid = [paths.vid_root filesep 'Seastars' filesep path_seq];
+
+% Path for data
+path_data = [paths.data_root filesep path_seq];
+
 % Load video info (v)
-v = defineVidObject(vid_path,'JPG');
+v = defineVidObject(path_vid,'JPG');
 
-[x,y] = tracker(vid_path,v,'threshold',1.3,1);
+% Make data directory, if necessary
+if isempty(dir(path_data))
+    mkdir(path_data);
+end
+       
 
-% return
+%% Track centroid coordinates
+
+if isempty(dir([path_data filesep 'Centroid.mat'])) || forceReRun
+    
+    % Run tracker code for centroid
+    Centroid = tracker(path_vid,v,'threshold',blobMultiple,0);
+    
+    % Save data
+    save([path_data filesep 'Centroid'],'Centroid')
+    
+    close
+else
+    
+    % Load 'Centroid'
+    load([path_data filesep 'Centroid.mat']);
+    
+end
+
+
+%% Track rotation
+
+if isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
+    
+    % Run tracker code for centroid
+    Rotation = tracker(path_vid,v,'body rotation',blobMultiple,0,...
+        Centroid.frames,Centroid);
+    
+    % Save data
+    save([path_data filesep 'Rotation'],'Rotation')
+    
+else
+    % Load 'Rotation'
+    load([path_data filesep 'Rotation.mat']);
+end
+
+
+%% Visualize
+
+% Make movie
+M = tracker(path_vid,v,'visualize',blobMultiple,0,Centroid.frames,Centroid,...
+        Rotation,makeVid);
+
+% Write movie to disk
+if makeVid
+    vid_save_path = uigetdir(path_data,'Save movie');
+    vInfo = VideoWriter([vid_save_path filesep 'video.mp4'],'MPEG-4');
+    vInfo.FrameRate = 15;
+    open(vInfo)
+    writeVideo(vInfo,M)
+    close(vInfo)
+end
+
+ return
 % 
 % % Frame numbers
 % frames = v.UserData.FirstFrame:v.UserData.LastFrame;
@@ -124,7 +192,6 @@ v = defineVidObject(vid_path,'JPG');
 % end
 % 
 % return
-
 
 
 
