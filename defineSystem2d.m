@@ -1,51 +1,75 @@
-function tform = defineSystem2d(origin,axCoord,axType)
+function tform = defineSystem2d(inType,varargin)
 % Defines coordinate local system (L) within global system (G)
+%    inType - type of data used to define coordinate system
+%    ('x-axis','y-axis')
+%
+% tform = defineSystem2d('roi tform',rect,tform)
+%    rect - vector defining the roi in G frame
+%    tform - transformation matrix for rotation within the roi
+%
+% tform = defineSystem2d('x-axis',origin,axCoord)
 %    origin  - a vector of 2 coordinates that define origin L in G
-%    axCoord - a vector of 2 coordinates defining an axis for L in G
-%    axType  - defines which axis of L given by axVect ('x' or 'y')
+%    axCoord - a vector of 2 coordinates defining x-axis for L in G
+%
+% tform = defineSystem2d('y-axis',origin,axCoord)
+%    origin  - a vector of 2 coordinates that define origin L in G
+%    axCoord - a vector of 2 coordinates defining y-axis for L in G
 %
 % Code developed by McHenryLab at UC Irvine
 
 
-%% Check inputs
+%% Translate inputs
 
-% Check dimensions of origin
-if length(origin)~=2 
-    error('Origin needs to have a length of 2')
+% If using axis coordinates
+if strcmp(inType,'x-axis') || strcmp(inType,'y-axis')
+    
+    % Set origin
+    origin = varargin{1};
+    
+    % Set axis
+    axCoord = varargin{2};
+    
+    % Check dimensions of origin
+    if length(origin)~=2
+        error('Origin needs to have a length of 2')
+    end
+    
+    % Check dimensions of axCoord
+    if length(axCoord)~=2
+        error('axCoord needs to have a length of 2')
+    end
+    
+    % Make origin a column vector
+    if size(origin,1)>size(origin,2)
+        origin = origin';
+    end
+    
+    % Make axCoord a column vector
+    if size(axCoord,1)>size(axCoord,2)
+        axCoord = axCoord';
+    end
+    
+    % Translate wrt origin
+    axCoord(1) = axCoord(1) - origin(1);
+    axCoord(2) = axCoord(2) - origin(2);
+
+    
+    
+elseif strcmp(inType,'roi tform')    
+    % Region of interest rectangle
+    rect = varargin{1};
+    
+    % Set axis
+    tform = varargin{2};
+    
+else
+    error('inType not recignized');
 end
-
-% Check dimensions of axCoord
-if length(axCoord)~=2
-    error('axCoord needs to have a length of 2')
-end
-
-% Check input of axType for 2D
-if ~strcmp(axType,'x') && ~strcmp(axType,'y') && ~strcmp(axType,'z')
-    error('axType needs to be given as either "x", "y", or "z"')
-end
-
-
-%% Adjust dimensions
-
-% Make origin a column vector
-if size(origin,1)>size(origin,2)
-    origin = origin';
-end
-
-% Make axCoord a column vector
-if size(axCoord,1)>size(axCoord,2)
-    axCoord = axCoord';
-end
-
-%% Translate wrt origin
-
-axCoord(1) = axCoord(1) - origin(1);
-axCoord(2) = axCoord(2) - origin(2);
 
 
 %% Define system from x-axis coordinate
 
-if strcmp(axType,'x')
+if strcmp(inType,'x-axis')
     
     % Define xaxis
     xaxis = axCoord;
@@ -66,7 +90,7 @@ end
 
 %% Define system from y-axis coordinate
 
-if strcmp(axType,'y')
+if strcmp(inType,'y-axis')
     
     % Define xaxis
     yaxis = axCoord;
@@ -87,12 +111,26 @@ if strcmp(axType,'y')
     zaxis = cross(xaxis,yaxis);
 end
 
+%% Define system for an roi
 
-%% Package system
+if strcmp(inType,'roi tform')    
+   
+    % Redefine origin, leave the rotation matrix
+    tform.T(3,:) = [rect(1) rect(2) 1];
+    
+    % Coordinates for roi
+    %tform.roi = rect;
+    
+end
 
-% Create rotation matrix (from inertial axes to local axes)
-R = [xaxis; yaxis; [origin 1]];
+%% Package system for output
 
-% Format trans matrix for matlab
-tform = affine2d(R);
+if strcmp(inType,'x-axis') || strcmp(inType,'y-axis')
+    % Create rotation matrix (from inertial axes to local axes)
+    R = [xaxis; yaxis; [origin 1]];
+       
+    % Format trans matrix for matlab
+    tform = affine2d(R);
+end
+
 

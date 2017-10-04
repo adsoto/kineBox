@@ -1,13 +1,26 @@
-function im = getFrame(vid_path,v,fr_num)  
+function im = getFrame(vid_path,v,fr_num,imInvert,clrMode)  
 % Reads image file from a video. 
 %   v - video structure
 %   fr_num - frame number desired
 %   vid_path - path to video (use path in v structure as default)
+%   imInvert - logical that indicates whether to invert a grayscale image
+%   clrMode - 'rgb' or 'gray' format for image 
+
 %
 % Developed by McHenryLab at UC Irvine
 
 % If it is an image sequence . . .
 if isfield(v.UserData,'FileInfo');
+    
+    % Default for image invert
+    if nargin < 4
+        imInvert = 0;
+    end
+    
+    % Default color mode
+    if nargin < 5
+        clrMode = 'rgb';
+    end
     
     % If no frmae number given . . .
     if nargin < 3
@@ -40,6 +53,16 @@ if isfield(v.UserData,'FileInfo');
     
     % Read image
     im = imread([vid_path filesep v.UserData.FileInfo(iFrame).name]);    
+    
+    % Convert to grayscale
+    if strcmp(clrMode,'gray')
+        im = rgb2gray(im);
+    end
+    
+    % Invert, if requested
+    if imInvert
+        im = imcomplement(im);
+    end
   
 % If a video file . . .
 else

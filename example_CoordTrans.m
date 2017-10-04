@@ -20,7 +20,7 @@ rightfin = [4 5];
 leftfin = [4.2 3.2];
 
 % Define coordinate system with 
-tform = defineSystem2d(head,tail,'x');
+tform = defineSystem2d('x-axis',head,tail);
 
 % Transform into local coordinates
 headL     = transCoord2d(head,tform,'global to local');

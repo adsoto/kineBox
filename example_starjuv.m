@@ -3,13 +3,28 @@ function example_starjuv
 %% Parameters
 
 % Factor by which the blob diameter gets multiplied for roi
-blobMultiple = 1.5;
+blobMultiple = 1.7;
 
 % Whether to make a video of the data
 makeVid = 1;
 
 % Re-run whole analysis
-forceReRun = 1;
+forceReRun = 0;
+
+% Frame rate (fps)
+frameRate = 30;
+
+% Calibration constant (m/pix)
+calConst = 10^-6; %TODO: Measure this for real
+
+% Execute animation code
+do_animate = 0;
+
+% Invert image
+imInvert = 1;
+
+% Visualize steps in analysis
+visSteps = 1;
 
 
 %% Preliminaries
@@ -41,7 +56,8 @@ end
 if isempty(dir([path_data filesep 'Centroid.mat'])) || forceReRun
     
     % Run tracker code for centroid
-    Centroid = tracker(path_vid,v,'threshold',blobMultiple,0);
+    Centroid = tracker(path_vid,v,'threshold translation',blobMultiple,...
+        imInvert,visSteps);
     
     % Save data
     save([path_data filesep 'Centroid'],'Centroid')
@@ -57,14 +73,17 @@ end
 
 %% Track rotation
 
-if isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
+if 1 %isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
     
     % Run tracker code for centroid
-    Rotation = tracker(path_vid,v,'body rotation',blobMultiple,0,...
-        Centroid.frames,Centroid);
+    Rotation = tracker(path_vid,v,'body rotation',blobMultiple,imInvert,...
+                       visSteps,Centroid.frames,Centroid);
     
     % Save data
     save([path_data filesep 'Rotation'],'Rotation')
+    
+    %TODO: Figure out why circular roi is getting warped over the course of
+    %the analysis.
     
 else
     % Load 'Rotation'
@@ -72,20 +91,62 @@ else
 end
 
 
-%% Visualize
+%% Isolate tube feet
 
-% Make movie
-M = tracker(path_vid,v,'visualize',blobMultiple,0,Centroid.frames,Centroid,...
+isolateRoiMotion(path_vid,v,path_data,Rotation,Centroid)
+
+
+return
+
+%% Calculate stuff
+
+% Frame period
+dt = 1/frameRate;
+
+% Step thru data
+for i = 1:length(Rotation)
+    
+    % Time
+    d.t(i,1) = i.*dt;
+    
+    % Head angle correction from image registration (imStable)
+    d.theta(i,1) = atan2(Rotation(i).tform_roi.T(1,2),Rotation(i).tform_roi.T(1,1));
+    
+    % Coordinate data
+    d.x(i,1) = Centroid.x_pix(i) * calConst;
+    d.y(i,1) = Centroid.y_pix_flip(i) * calConst;
+    
+end
+
+subplot(2,1,1)
+plot(d.t,d.x.*1000,'-',d.t,d.y.*1000,'-')
+xlabel('time (s)')
+ylabel('Position (mm)')
+legend('x','y')
+
+subplot(2,1,2)
+plot(d.t,d.theta.*180/pi,'-')
+ylabel('Orientation (deg)')
+
+
+%% Animation 
+
+if do_animate
+    
+    % Make movie
+    M = tracker(path_vid,v,'visualize',blobMultiple,0,Centroid.frames,Centroid,...
         Rotation,makeVid);
-
-% Write movie to disk
-if makeVid
-    vid_save_path = uigetdir(path_data,'Save movie');
-    vInfo = VideoWriter([vid_save_path filesep 'video.mp4'],'MPEG-4');
-    vInfo.FrameRate = 15;
-    open(vInfo)
-    writeVideo(vInfo,M)
-    close(vInfo)
+    
+    % Write movie to disk
+    if makeVid
+        vid_save_path = uigetdir(path_data,'Save movie');
+        vInfo = VideoWriter([vid_save_path filesep 'video.mp4'],'MPEG-4');
+        vInfo.FrameRate = 15;
+        open(vInfo)
+        writeVideo(vInfo,M)
+        close(vInfo)
+    end
+    
 end
 
  return
