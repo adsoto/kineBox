@@ -18,6 +18,8 @@ function varargout = transCoord2d(trans_type,varargin)
 %
 % Code developed by McHenryLab at UC Irvine
 
+%% Translate inputs
+
 % Inputs for coordinate transformation
 if strcmp(trans_type,'G2L') || ...
    strcmp(trans_type,'L2G')
@@ -35,17 +37,19 @@ if strcmp(trans_type,'G2L') || ...
     
     
 % Inputs for image transformation
-elseif strcmp(trans_type,'im G2L') || ...
-       strcmp(trans_type,'im L2G')
+elseif strcmp(trans_type,'bw L2G')
    
    % First input needs to be tform
     tform = varargin{1};
     
-    % First input needs to be tform
-    im_roi = varargin{2};
+    % Image in roi FOR
+    bw_roi = varargin{2};
     
-    % First input needs to be tform
-    im_G = varargin{3};
+    % binary denoting the roi in global FOR
+    bw_G = varargin{3};
+    
+    % Image in global FOR
+    bw_roi_mask = varargin{4};
     
 else
     error('trans_type not recognized');
@@ -55,6 +59,8 @@ end
 if tform.Dimensionality~=2
     error('Code only handles 2D transformations')
 end
+
+%% Transformations
     
 % Global to local transformation (coordinates)
 if strcmp(trans_type,'global to local')
@@ -64,37 +70,58 @@ if strcmp(trans_type,'global to local')
     coord_in(:,2) = coord_in(:,2) - tform.T(3,2);
     
     % Rotate
-    data_out = [tform.T(1:2,1:2) * coord_in']';
+    coord_out = [tform.T(1:2,1:2) * coord_in']';
     
     
 % Local to global transformation (coordinates)
 elseif strcmp(trans_type,'local to global')
     
     % Rotate points
-    data_out = (tform.T(1:2,1:2) \ coord_in')';
+    coord_out = (tform.T(1:2,1:2) \ coord_in')';
     
     % Translate global coordinates wrt origin
-    data_out(:,1) = data_out(:,1) + tform.T(3,1);
-    data_out(:,2) = data_out(:,2) + tform.T(3,2);
+    coord_out(:,1) = coord_out(:,1) + tform.T(3,1);
+    coord_out(:,2) = coord_out(:,2) + tform.T(3,2);
     
 % Local to global transformation (coordinates)
-elseif strcmp(trans_type,'im L2G')
+elseif strcmp(trans_type,'bw L2G')
     
-    % Extract origin
-    origin = tform.T(3,1:2);
+    % Coordinate system for im_roi
+    R = imref2d(size(bw_roi)); 
     
-    % Remove translation component to transformation
-    tform.T(3,:) = [0 0 1];
+    % Adjust WorldLimits to restrict transformation to just rotation
+    % around center
+    R.XWorldLimits = R.XWorldLimits-mean(R.XWorldLimits);
+    R.YWorldLimits = R.YWorldLimits-mean(R.YWorldLimits);
     
-    % Perform rotation
-    im_rot = imwarp(im_roi,tform,'OutputView',imref2d(size(im_roi)),...
-                  'FillValues',255,'SmoothEdges',true);
+    % Stablize image
+    roiRot = imwarp(bw_roi,R,invert(tform),'OutputView',R,...
+         'FillValues',255,'SmoothEdges',true);
+%     
+%     % White out beyond roi
+    roiRot(~bw_roi_mask) = 0;
+       
+    % Black out region outside of roi
+    imOut = logical(bw_G.*0);
     
-    % Perform translation
-    data_out = imtranslate(im_rot,-origin);
+    imOut(bw_G) = roiRot;
     
     
-    aaa=3;
+%     % Extract origin
+%     origin = tform.T(3,1:2);
+%     
+%     % Remove translation component to transformation
+%     tform.T(3,:) = [0 0 1];
+%     
+%     % Perform rotation
+%     im_rot = imwarp(im_roi,tform,'OutputView',imref2d(size(im_roi)),...
+%                   'FillValues',255,'SmoothEdges',true);
+%     
+%     % Perform translation
+%     data_out = imtranslate(im_rot,-origin);
+%     
+%     
+%     aaa=3;
     
 % Global to local transformation (coordinates)
 elseif strcmp(trans_type,'im G2L')
@@ -105,6 +132,21 @@ else
     error('Do not recognize requested transformation')
     
 end
+
+%% Set outputs
+
+if strcmp(trans_type,'G2L') || ...
+   strcmp(trans_type,'L2G')
+
+    varargout{1} = coord_out;
+    
+elseif strcmp(trans_type,'bw L2G')
+    
+    varargout{1}  = imOut;
+    
+end
+
+
 % 
 % 
 % % FUNCTIONS --------------------------

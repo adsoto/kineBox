@@ -139,6 +139,7 @@ if strcmp(method,'threshold translation')
     
     % Store radius
     Centroid.r_pix = r;
+    Centroid.theta = theta;
     
     clear xPerim yPerim bw r
     
@@ -216,10 +217,8 @@ for i = 1:length(frames)
 
         % Store results
         Rotation(i).tform_roi = tform;
-        %Rotation(i).
         Rotation(i).roi_rect = roi_rect;
-        
-        
+         
         % Clear for next iteration
         clear im_roi tform_roi imStable xC yC h imMask im_roi
     end
@@ -233,14 +232,14 @@ for i = 1:length(frames)
         % If rotation data included . . .
         if includeRot
             visTrack(im,Centroid.x_pix(i),Centroid.y_pix(i),Centroid.r_pix,theta,...
-                Rotation(i).tform_roi,t_txt,dSample);
+                Rotation(i).tform_roi,t_txt);
             
         % If no rotation
         else
 
             % Visualization code
             visTrack(im,Centroid.x_pix(i),Centroid.y_pix(i),Centroid.r_pix,...
-                theta,[],t_txt,dSampling);
+                theta,[],t_txt);
         end
         
         % Log frame
@@ -284,24 +283,17 @@ end
 
 
 
-function visTrack(im,x,y,r,theta,tform,t_txt,dSample)
+function visTrack(im,x,y,r,theta,tform,t_txt)
+
+% Do not downsample the roi image:
+dSample = 0;
 
 % If rotation included . . 
 if nargin>5 && ~isempty(tform)
     % Focus on roi
-    %[im_roi,imMask,roi_rect] = isolate_roi(im,x,y,r,theta);
-    
-    [bw_mask,im_roi,roi_rect,bw_roi] = giveROI('circular',im,x,y,r,theta,0);
-    
-    %TODO: Fix the problem with skew in image
-    
-    % Stablize image
-    imStable = imwarp(im_roi,tform,'OutputView',imref2d(size(im_roi)),...
-        'FillValues',255,'SmoothEdges',true);
-    
-    % White out beyond roi
-    imStable(~bw_roi) = 255;
-
+    [bw_mask,im_roi,roi_rect,bw_roi,imStable] = giveROI('circular',im,x,y,r,theta,...
+        dSample,tform);
+  
     subplot(1,2,2)
     imshow(imStable,'InitialMagnification','fit');
     

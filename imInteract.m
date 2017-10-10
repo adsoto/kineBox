@@ -30,13 +30,13 @@ if strcmp(action,'threshold')
     % Up arrow
     i = i + 1;
     B{i}.key = 30;
-    B{i}.dostr = 'tVal = min([tVal+0.05 1]);';
+    B{i}.dostr = 'tVal = min([tVal+0.02 1]);';
     B{i}.info = 'Up arrow: increase threshold';
     
     % Down arrow
     i = i + 1;
     B{i}.key = 31;
-    B{i}.dostr = 'tVal = max([tVal-0.05 0]);';
+    B{i}.dostr = 'tVal = max([tVal-0.02 0]);';
     B{i}.info = 'Down arrow: decrease threshold';
     
 % Threshold and selection mode
@@ -45,13 +45,13 @@ elseif strcmp(action,'threshold and selection')
     % Up arrow
     i = i + 1;
     B{i}.key = 30;
-    B{i}.dostr = 'tVal = min([tVal+0.05 1]);';
+    B{i}.dostr = 'tVal = min([tVal+0.02 1]);';
     B{i}.info = 'Up arrow: increase threshold';
     
     % Down arrow
     i = i + 1;
     B{i}.key = 31;
-    B{i}.dostr = 'tVal = max([tVal-0.05 0]);';
+    B{i}.dostr = 'tVal = max([tVal-0.02 0]);';
     B{i}.info = 'Down arrow: decrease threshold';
     
     % Left click
@@ -66,25 +66,25 @@ elseif strcmp(action,'area')
     % Up arrow
     i = i + 1;
     B{i}.key = 30;
-    B{i}.dostr = 'areaMin = areaMin + 5;';
+    B{i}.dostr = 'areaMin = areaMin + areaMin_inc;';
     B{i}.info = 'Up arrow: increase min area';
     
     % Down arrow
     i = i + 1;
     B{i}.key = 31;
-    B{i}.dostr = 'areaMin = max([0 (areaMin - 5)]);';
+    B{i}.dostr = 'areaMin = max([0 (areaMin - areaMin_inc)]);';
     B{i}.info = 'Down arrow: decrease min area';
     
     % Right arrow
     i = i + 1;
     B{i}.key = 29;
-    B{i}.dostr = 'areaMax = areaMax + 50;';
+    B{i}.dostr = 'areaMax = areaMax + areaMax_inc;';
     B{i}.info = '->: increase max area';
     
     % Left arrow
     i = i + 1;
     B{i}.key = 28;
-    B{i}.dostr = 'areaMax = max([0 areaMax-50]);';
+    B{i}.dostr = 'areaMax = max([0 areaMax-areaMax_inc]);';
     B{i}.info = '<-: decrease max area';
     
 % Display blobs
@@ -111,8 +111,11 @@ imshow(im,'InitialMagnification','fit');
 hold on
 
 % Parameter defaults
-areaMin = 10;
-areaMax = 1000;
+totArea = size(im,1)*size(im,2);
+areaMin = totArea/10^4;
+areaMax = totArea/10^2;
+areaMin_inc = areaMin/10;
+areaMax_inc = areaMax/10;
 areaMean = nan;
 tVal = graythresh(im);
 xPos = [];

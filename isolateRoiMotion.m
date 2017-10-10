@@ -1,4 +1,4 @@
-function isolateRoiMotion(vid_path,v,data_path,Rotation,Centroid)
+function isolateRoiMotion(vid_path,v,data_path,Rotation,Centroid,imInvert)
 % Create movies of the moving objects in a roi
 
 
@@ -10,10 +10,15 @@ maxFrames = 100;
 % Angular coordinates for circular roi
 phi = linspace(0,2*pi,500);
 
+% Rerun all steps in the analysis
+force_redo = 0;
 
-%% Make mean image of roi
 
-if isempty(dir([data_path filesep 'meanRoiImageData.mat']))
+makeVid = 0;
+
+%% Make mean image of roi & main image
+
+if force_redo ||  isempty(dir([data_path filesep 'meanRoiImageData.mat']))
     
     % frames to use
     if length(Centroid.frames) > maxFrames
@@ -23,6 +28,9 @@ if isempty(dir([data_path filesep 'meanRoiImageData.mat']))
     else
         framenums = Centroid.frames;
     end
+    
+    % Do not downsample the roi image
+    dSample = 0;
     
     % Loop thru frames
     for i = 1:length(framenums)
@@ -34,29 +42,34 @@ if isempty(dir([data_path filesep 'meanRoiImageData.mat']))
         x = Centroid.x_pix(i);
         y = Centroid.y_pix(i);
         r = Centroid.r_pix;
+        theta = Centroid.theta;
         tform = Rotation(i).tform_roi;
+       
+         % Current image
+        im = getFrame(vid_path,v,cFrame,imInvert,'gray');
         
-        % Load current image
-        im = rgb2gray(getFrame(vid_path,v,cFrame));
+        % Extract roi
+        [bw_mask,im_roi,roi_rect,bw_roi,imStable] = giveROI('circular',...
+            im,x,y,r,theta,dSample,tform);
         
-        % Get roi image
-        [im_roi,imMask] = isolate_roi(im,x,y,r,phi);
-        
-        % Stablize rotation
-        im_roi = imwarp(im_roi,tform,'OutputView',imref2d(size(im_roi)));
-        
-        % White out beyond roi
-        im_roi(~imMask) = 255;
-    
         % Add pixel values
         if i==1
-            imSum = double(im_roi);
+            % Sum matrix for whole image
+            imSum = double(im);
+            
+            % Sum matrix for stablized roi
+            imSum_roi = double(imStable);
         else
-            imSum  = imSum + double(im_roi);
+            % Sum matrix for whole image
+            imSum  = imSum + double(im);
+            
+            % Sum matrix for stablized roi
+            imSum_roi  = imSum_roi + double(imStable);
         end
-        
+               
         % Clear for next
-        clear x y r tform cFrame im
+        clear x y r tform cFrame im theta im bw_mask im_roi roi_rect 
+        clear bw_roi imStable
         
         % Update status
         disp(['Mean roi image: done ' num2str(i) ' of ' ...
@@ -64,23 +77,34 @@ if isempty(dir([data_path filesep 'meanRoiImageData.mat']))
     end
     
     % Calculate mean from sum image
-    imRoiMean = uint8(round(imSum./length(framenums)));
+    imMean = uint8(round(imSum./length(framenums)));
+    
+    % Calculate mean from sum image (stable roi)
+    imRoiMean = uint8(round(imSum_roi./length(framenums)));
+    
+    % Save image image data (roi)
+    save([data_path filesep 'meanRoiImageData'],'imRoiMean');
     
     % Save image image data
-    save([data_path filesep 'meanRoiImageData'],'imRoiMean');
+    save([data_path filesep 'meanImageData'],'imMean');
     
 else
     % Load imRoiMean
     load([data_path filesep 'meanRoiImageData.mat'])
+    
+    % Load imMean
+    load([data_path filesep 'meanImageData.mat'])
 end
 
 
-%% Mean image subtraction
+%% Mean image subtraction (roi)
 
-
-if isempty(dir([data_path filesep 'roiSequence.mat']))
+if force_redo || isempty(dir([data_path filesep 'roiSequence.mat']))
     
     framenums = Centroid.frames;
+    
+    % Do not downsample the images
+    dSample = 0;
     
     % Loop thru frames
     for i = 1:length(framenums)
@@ -93,30 +117,53 @@ if isempty(dir([data_path filesep 'roiSequence.mat']))
         y = Centroid.y_pix(i);
         r = Centroid.r_pix;
         tform = Rotation(i).tform_roi;
+        theta = Centroid.theta;
         
-        % Load current image
-        im = rgb2gray(getFrame(vid_path,v,cFrame));
+        % Current image
+        im = getFrame(vid_path,v,cFrame,imInvert,'gray');
         
-        % Get roi image
-        [im_roi,imMask] = isolate_roi(im,x,y,r,phi);
-        
-        % Stablize rotation
-        im_roi = imwarp(im_roi,tform,'OutputView',imref2d(size(im_roi)));
-        
-        % White out beyond roi
-        im_roi(~imMask) = 255;
+        % Extract roi
+        [bw_mask,im_roi,roi_rect,bw_roi,imStable] = giveROI('circular',...
+            im,x,y,r,theta,dSample,tform);
+
+        % Adjust contrast 
+        if i==1
+            imRoiMean = imadjust(adapthisteq(imRoiMean));
+        end
+        imStable = imadjust(adapthisteq(imStable));
         
         % Subtract background
         warning off
-        im_seq(:,:,i) = uint8(imadjust(imcomplement(imsubtract(im_roi,imRoiMean))));
+        if imInvert
+            im_seq(:,:,i) = imadjust(uint8(imcomplement(imsubtract(imRoiMean,imStable))));
+        else
+            im_seq(:,:,i) = imadjust(uint8(imcomplement(imsubtract(imStable,imRoiMean))));
+        end
         warning on
         
         % Visualize
         if 0
-            imshow(im_roi2,'InitialMagnification','fit');
-            title([num2str(cFrame)])
+            subplot(2,2,1)
+            imshow(imStable,'InitialMagnification','fit');
+            title('imStable')
+            subplot(2,2,2)
+            imshow(imRoiMean,'InitialMagnification','fit');
+            title('mean image')
+            subplot(2,2,3)
+            warning off
+            imshowpair(imStable,imRoiMean)
+            warning on
+            title('stable over mean image')
+            subplot(2,2,4)
+            imshow(im_seq(:,:,i),'InitialMagnification','fit');
+            title('mean image subtraction')
+            %title([num2str(cFrame)]
             pause(0.001);
         end
+        
+        % Clear for next
+        clear x y r tform cFrame im theta im bw_mask im_roi roi_rect 
+        clear bw_roi imStable
         
         % Update status
         disp(['Mean image subtraction: done ' num2str(i) ' of ' ...
@@ -134,7 +181,7 @@ end
 
 %% Interactive mode
 
-if isempty(dir([data_path filesep 'blobParam.mat']))
+if force_redo || isempty(dir([data_path filesep 'blobParam.mat']))
     
     justReplay = 0;
     
@@ -192,72 +239,240 @@ end
 
 %% Transform blobs back to global FOR
 
-for i = 1:length(Rotation)
+if isempty(dir([data_path filesep 'Blob data.mat']))
     
+    framenums = Centroid.frames;
+    
+    for i = 1:length(Rotation)
+        
+        % Get roi image
+        cIm = im_seq(:,:,i);
+        
+        % Find blobs in roi
+        [props,bw_roi,areas,xB,yB] = findBlobs(cIm,blobParam.tVal,...
+            'area',blobParam.areaMin,blobParam.areaMax);
+        
+        rMin = inf;
+        rMax = 0;
+        
+        for j = 1:length(props)
+            %rMin = min([rMin props(j).MinorAxisLength/2]);
+            %rMax = max([rMax props(j).MajorAxisLength/2]);
+            rVals(j,1) = props(j).MajorAxisLength/2;
+        end
+        
+        rMax = ceil(quantile(rVals,0.9));
+        rMin = floor(rMax/3);
+        
+        
+        % Extract current parameters for whole image
+        cFrame = framenums(i);
+        x = Centroid.x_pix(i);
+        y = Centroid.y_pix(i);
+        r = Centroid.r_pix;
+        theta = Centroid.theta;
+        tform = Rotation(i).tform_roi;
+        
+        % Current whole frame
+        im = getFrame(vid_path,v,cFrame,imInvert,'gray');
+        
+        % Get roi data
+        [bw_mask,im_roi,roi_rect,bw_roi_mask] = giveROI('circular',im,x,y,r,theta,0);
+        
+        % Blobs in the G FOR
+        bw_blobs_G = transCoord2d('bw L2G',tform,bw_roi,bw_mask,bw_roi_mask);
+        
+%         [cntrs,radii] = imfindcircles(bw_roi,[max([1 floor(rMin)]) ceil(rMax)],...
+%                                       'ObjectPolarity','bright');
+%           viscircles(cntrs, radii,'Color','b');  
+
+        % Survey blobs
+        propsG = regionprops(bw_blobs_G,'Centroid','Area',...
+            'MajorAxisLength','MinorAxisLength',...
+            'PixelIdxList','PixelList');
+        
+        % Store blob data
+        B(i).propsG = propsG;
+        B(i).propsL = props;
+        
+        if 0
+            % Current whole frame
+            imI = getFrame(vid_path,v,cFrame,~imInvert,'gray');
+            
+            h = imshow(imI,'InitialMag','fit');
+            hold on
+            
+            % Make a truecolor all-green image, make non-blobs invisible
+            green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
+            h = imshow(green,'InitialMag','fit');
+            set(h, 'AlphaData', bw_blobs_G)
+            
+            title(['Frame ' num2str(framenums(i))]);
+            
+            pause(0.001)
+            
+        else
+            disp(['Overlaying blobs: ' num2str(i) ' of ' num2str(length(Rotation))]);
+        end
+        
+        clear props propsG bw_mask im_roi roi_rect bw_roi_mask bw_roi 
+        clear areas xB yB
+    end
+    
+    % Save image image data
+    save([data_path filesep 'Blob data'],'B');
+    
+else
+    % Load 'bwG_seq'
+    load([data_path filesep 'Blob data']);
+end
+
+%% Filter out moving blobs
+
+winLen = 10;
+
+framenums = Centroid.frames;
+
+for i = ceil(winLen/2):length(Rotation)-ceil(winLen/2)
+    
+    % Get roi image
     cIm = im_seq(:,:,i);
+
+    % Extract current parameters for whole image
+    cFrame = framenums(i);
+    x = Centroid.x_pix(i);
+    y = Centroid.y_pix(i);
+    r = Centroid.r_pix;
+    theta = Centroid.theta;
+    tform = Rotation(i).tform_roi;
     
-    % Find blobs in roi
-    [props,bw_roi,areas,xB,yB] = findBlobs(cIm,blobParam.tVal,...
-                        'area',blobParam.areaMin,blobParam.areaMax);
-       
-    % Transformation matrix for current roi
-    tform = defineSystem2d('roi tform',Rotation(i).roi_rect,...
-                          Rotation(i).tform_roi);
+    % Current whole frame
+    im = getFrame(vid_path,v,cFrame,imInvert,'gray');
     
-    % Binary image in global FOR                  
-    bw_G = transCoord2d('im L2G',tform,bw_roi,cIm);
+    startFrame = max([1 i-floor(winLen/2)]);
+    endFrame = min([length(Rotation) i+floor(winLen/2)]);
+    
+    winFrames = startFrame:endFrame;
+    
+    % Loop thru window of images
+    for j = 1:length(winFrames)
+        
+        % Current frame
+        iFrame = winFrames(j);
+        
+        % Start with blank
+        currIm  = logical(zeros(size(im)));
+        
+        % Score pixels with blobs
+        for k = 1:length(B(iFrame).propsG),
+            currIm(B(iFrame).propsG(k).PixelIdxList) = 1;            
+        end
+        
+        % Store resulting image
+        bwStack(:,:,j) = currIm;
+    end
+    
+    % image of the pixels that are most static
+    imStackScore = uint8(sum(double(bwStack),3)./winLen.*255);
+    
+    %tVal = imInteract(imcomplement(imStackScore),'threshold');
+    tVal = 0.5871;
+    
+    bwNew = im2bw(imStackScore,tVal);
+    
+    % Fill holes
+    bwNew = imfill(bwNew,'holes');
+    
+    %bwPer = bwperim(bwNew);
+    
+%     % Get roi data
+%     [bw_mask,im_roi,roi_rect,bw_roi_mask,imStable] = giveROI('circular',...
+%         imStackScore,x,y,r,theta,0,tform);
+    
+    
+    %imStackScore = uint8(mean(bwStack,3)./winLen.*255);
+    
+    %imshow(imStackScore)
     
     if 1
+        % Current whole frame
+         imI = getFrame(vid_path,v,cFrame,~imInvert,'gray');
+        
+        h = imshow(imI,'InitialMag','fit');
+        hold on
+%         
         % Make a truecolor all-green image, make non-blobs invisible
         green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
         h = imshow(green,'InitialMag','fit');
-        set(h, 'AlphaData', bw)
-        imshow(im_seq(:,:,i),'InitialMag','fit');
-    end
+        set(h, 'AlphaData', double(bwNew).*0.2)
         
-end
-%TODO: use blobs as masks that are overlaid back onto source image
-%TODO: reject masks that move in global FOR
-
-
-
-
-function [im,roi_mask] = isolate_roi(im,x,y,r,theta)
-
-% Maximum size of an image dimension
-maxSize = 250;
-
-% rectangular ROI vector
-roi_rect = ceil([x-r y-r r*2 r*2]);
-
-% Crop image
-im  = imcrop(im,roi_rect);
-
-% Circular coordinates for new roi
-xC    = r.*cos(theta)+ size(im,2)/2;
-yC    = r.*sin(theta) + size(im,1)/2;
-
-% White out pixels outside of circular roi
-roi_mask = roipoly(size(im,1),size(im,2),round(yC),round(xC));
-
-% White out area around roi
-im(~roi_mask) = 255;
-
-% Reduce size (helps speed up image registration)
-if length(im)>maxSize
+        title(['Frame ' num2str(framenums(i))]);
+        hold off
+        
+        % Log frame
+        if makeVid
+            M(i) = getframe(gcf);
+        end
+        
+        
+        pause(0.001)
+        
+    else
+        disp(['Overlaying blobs: ' num2str(i) ' of ' num2str(length(Rotation))]);
+    end
     
-    imFactor = maxSize/length(im);
-    
-    im = imresize(im,imFactor);
-    
-    % White out pixels outside of circular roi
-    roi_mask = roipoly(size(im,1),size(im,2),round(yC*imFactor),round(xC*imFactor));
+    clear props propsG bw_mask im_roi roi_rect bw_roi_mask bw_roi
+    clear areas xB yB
 end
 
-% Check for square
-if size(im,1)~=size(im,2)
-    error('Image not square');
-end
+
+
+ % Write movie to disk
+    if makeVid
+        vid_save_path = uigetdir(data_path,'Save movie');
+        vInfo = VideoWriter([vid_save_path filesep 'video tubefeet.mp4'],'MPEG-4');
+        vInfo.FrameRate = 15;
+        open(vInfo)
+        writeVideo(vInfo,M)
+        close(vInfo)
+    end
+
+% function [im,roi_mask] = isolate_roi(im,x,y,r,theta)
+% 
+% % Maximum size of an image dimension
+% maxSize = 250;
+% 
+% % rectangular ROI vector
+% roi_rect = ceil([x-r y-r r*2 r*2]);
+% 
+% % Crop image
+% im  = imcrop(im,roi_rect);
+% 
+% % Circular coordinates for new roi
+% xC    = r.*cos(theta)+ size(im,2)/2;
+% yC    = r.*sin(theta) + size(im,1)/2;
+% 
+% % White out pixels outside of circular roi
+% roi_mask = roipoly(size(im,1),size(im,2),round(yC),round(xC));
+% 
+% % White out area around roi
+% im(~roi_mask) = 255;
+% 
+% % Reduce size (helps speed up image registration)
+% if length(im)>maxSize
+%     
+%     imFactor = maxSize/length(im);
+%     
+%     im = imresize(im,imFactor);
+%     
+%     % White out pixels outside of circular roi
+%     roi_mask = roipoly(size(im,1),size(im,2),round(yC*imFactor),round(xC*imFactor));
+% end
+% 
+% % Check for square
+% if size(im,1)~=size(im,2)
+%     error('Image not square');
+% end
 
 
 function meanRoiImage

@@ -54,8 +54,7 @@ if strcmp(bMode,'area')
     
     % Loop thru blobs
     for i = 1:length(props)
-        
-        
+  
         % If blob is in the area bounds . . .
         if (props(i).Area >= areaMin) && ...
                 (props(i).Area <= areaMax)
@@ -64,15 +63,15 @@ if strcmp(bMode,'area')
             areas(j,1) = props(i).Area;
             
             % Add to props out
-            propOut(j) = props(i);
+            propOut(j,1) = props(i);
             
             % Add white pixels for current blob
             bwOut(props(i).PixelIdxList) = 1;
             
+            j = j + 1;
             %x = 1;
             %plot(props(i).PixelList(:,1),props(i).PixelList(:,2),'g.')
-        end
-        
+        end        
     end
     
 elseif strcmp(bMode,'coord')
@@ -80,7 +79,7 @@ elseif strcmp(bMode,'coord')
     bw = bwselect(bw,x,y);
     
     % Survey blobs
-    props = regionprops(bw,'Centroid','Area',...
+    propOut = regionprops(bw,'Centroid','Area',...
         'MajorAxisLength','MinorAxisLength',...
         'PixelIdxList','PixelList');
     
@@ -102,7 +101,7 @@ end
 %% Outputs
 
 % Define outputs
-varargout{1} = props;
+varargout{1} = propOut;
 varargout{2} = bwOut;
 
 % Areas, if requested

@@ -24,7 +24,7 @@ do_animate = 0;
 imInvert = 1;
 
 % Visualize steps in analysis
-visSteps = 1;
+visSteps = 0;
 
 
 %% Preliminaries
@@ -73,7 +73,7 @@ end
 
 %% Track rotation
 
-if 1 %isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
+if isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
     
     % Run tracker code for centroid
     Rotation = tracker(path_vid,v,'body rotation',blobMultiple,imInvert,...
@@ -81,9 +81,6 @@ if 1 %isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
     
     % Save data
     save([path_data filesep 'Rotation'],'Rotation')
-    
-    %TODO: Figure out why circular roi is getting warped over the course of
-    %the analysis.
     
 else
     % Load 'Rotation'
@@ -93,7 +90,7 @@ end
 
 %% Isolate tube feet
 
-isolateRoiMotion(path_vid,v,path_data,Rotation,Centroid)
+isolateRoiMotion(path_vid,v,path_data,Rotation,Centroid,imInvert)
 
 
 return

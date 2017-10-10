@@ -2,11 +2,12 @@
 function varargout = giveROI(roi_type,varargin)
 % Returns data and images for a region-of-interest (ROI)
 %
-%[bw_mask,im_roi,roi_rect,bw_roi_mask] = giveROI(...
+%[bw_mask,im_roi,roi_rect,bw_roi_mask,imStable] = giveROI(...
 %   bw_mask - binary image for the roi with dimensions of im
 %   im_roi - image within the roi (downsampled, if dSampling==1)
 %   roi_rect - [x y width height] of the roi bounding box
 %   bw_roi_mask - binary of mask in roi
+%   imStable - image stablized against rotation
 %
 % ... = giveROI('circular',im,xC,yC,r,theta,dSampling)
 %   im - image
@@ -15,11 +16,15 @@ function varargout = giveROI(roi_type,varargin)
 %   r - roi circle radius
 %   theta - angular position
 %   dSampling - logical that indicates whether to downsample roi image
+
+% [...,imStable] = giveROI('circular',im,xC,yC,r,theta,dSampling,tform)
+% Returns stablized image 
+%   imStable - image stablized, accordind to rotation detailed by tform
 %
 % Developed by McHenryLab at UC Irvine
 
 
-%% Translate inputs
+%% Translate inputs 
 
 if strcmp(roi_type,'circular')
     
@@ -28,7 +33,28 @@ if strcmp(roi_type,'circular')
     yC         = varargin{3};
     r          = varargin{4};
     theta      = varargin{5};
-    dSampling  = varargin{6};
+    
+    if nargin >6
+        dSampling  = varargin{6};
+    else
+        dSampling = 0;
+    end
+    
+    if nargin >7
+        tform = varargin{7};
+        
+%         % Check tform
+%         if ~isfield(tform,'T')
+%             error('tform has the wrong format');
+%         end
+        
+        if nargout<5
+            error(['You need to assign at least 5 outputs for imStable ' ...
+                 'when you provide a tform'])
+        end
+    else
+        tform.T = [];
+    end
     
 else
     error('Do not recognize roi_type')
@@ -55,7 +81,14 @@ yCirc_roi    = round(floor(r).*sin(theta) + r);
 %% Create images
 
 % Binary mask in image im
-bw_mask = roipoly(size(im,1),size(im,2),xCirc,yCirc);
+%bw_mask = roipoly(size(im,1),size(im,2),xCirc,yCirc);
+bw_mask = roipoly(size(im,1),size(im,2),...
+                  [roi_rect(1) roi_rect(1)+roi_rect(3)+1 ...
+                   roi_rect(1)+roi_rect(3)+1 roi_rect(1) ...
+                   roi_rect(1)],...
+                  [roi_rect(2) roi_rect(2) ...
+                   roi_rect(2)+roi_rect(4)+1 roi_rect(2)+roi_rect(4)+1 ...
+                   roi_rect(2)]);
 
 % Crop image
 im_roi  = imcrop(im,roi_rect);
@@ -92,5 +125,31 @@ varargout{1} = bw_mask;
 varargout{2} = im_roi;
 varargout{3} = roi_rect;
 varargout{4} = bw_roi_mask;
+
+% Create imStable, if requested
+if nargout>4
+    
+    if isempty(tform.T)
+        error('You need to provide tform if you want imStable');
+    end 
+    
+    % Coordinate system for im_roi
+    R = imref2d(size(im_roi)); 
+    
+    % Adjust WorldLimits to restrict transformation to just rotation
+    % around center
+    R.XWorldLimits = R.XWorldLimits-mean(R.XWorldLimits);
+    R.YWorldLimits = R.YWorldLimits-mean(R.YWorldLimits);
+    
+    % Stablize image
+    imStable = imwarp(im_roi,R,tform,'OutputView',R,...
+         'FillValues',255,'SmoothEdges',true);
+    
+    % White out beyond roi
+    imStable(~bw_roi_mask) = 255;
+
+    % Deliver imStable
+    varargout{5} = imStable;
+end
 
 
