@@ -13,74 +13,51 @@ phi = linspace(0,2*pi,500);
 % Rerun all steps in the analysis
 force_redo = 0;
 
-
+% Make movie of resulting data 
 makeVid = 0;
 
-%% Make mean image of roi & main image
 
-if force_redo ||  isempty(dir([data_path filesep 'meanRoiImageData.mat']))
+%% Make mean images of roi & main image
+
+if 1 %force_redo ||  ...
+        (isempty(dir([data_path filesep 'meanRoiImageData.mat'])) && ...
+         isempty(dir([data_path filesep 'meanImageData.mat'])) )
     
-    % frames to use
-    if length(Centroid.frames) > maxFrames
-        framenums = Centroid.frames(1):...
-            floor(length(Centroid.frames)/maxFrames): ...
-            Centroid.frames(end);
-    else
-        framenums = Centroid.frames;
-    end
+     % Make mean images 
+    [imMean,imRoiMean] = motionImage(vid_path,v,'mean roi','none',...
+                                  maxFrames,Centroid,Rotation,0);
+  
+    % Plot mean images
+    f = figure;
+    subplot(3,2,[1 3])
+    imshow(imMean,'InitialMag','fit');
+    title('Mean image')
+    subplot(3,2,5)
+    imhist(imMean)
     
-    % Do not downsample the roi image
-    dSample = 0;
+    subplot(3,2,[2 4])
+    imshow(imRoiMean,'InitialMag','fit');
+    title('Mean roi image')
+    subplot(3,2,6)
+    imhist(imRoiMean)
     
-    % Loop thru frames
-    for i = 1:length(framenums)
-        
-        % Current frame
-        cFrame = framenums(i);
-        
-        % Extract current parameters
-        x = Centroid.x_pix(i);
-        y = Centroid.y_pix(i);
-        r = Centroid.r_pix;
-        theta = Centroid.theta;
-        tform = Rotation(i).tform_roi;
-       
-         % Current image
-        im = getFrame(vid_path,v,cFrame,imInvert,'gray');
-        
-        % Extract roi
-        [bw_mask,im_roi,roi_rect,bw_roi,imStable] = giveROI('circular',...
-            im,x,y,r,theta,dSample,tform);
-        
-        % Add pixel values
-        if i==1
-            % Sum matrix for whole image
-            imSum = double(im);
+    % Prompt to proceed
+    ButtonName = questdlg('Do the mean images look good?', ...
+        '', 'Yes, proceed', 'No', 'Cancel', 'Yes, proceed');
+    
+    switch ButtonName,
+        case 'Cancel',
+            disp(''); disp('Quitting analysis . . .');beep
+            return
             
-            % Sum matrix for stablized roi
-            imSum_roi = double(imStable);
-        else
-            % Sum matrix for whole image
-            imSum  = imSum + double(im);
-            
-            % Sum matrix for stablized roi
-            imSum_roi  = imSum_roi + double(imStable);
-        end
-               
-        % Clear for next
-        clear x y r tform cFrame im theta im bw_mask im_roi roi_rect 
-        clear bw_roi imStable
-        
-        % Update status
-        disp(['Mean roi image: done ' num2str(i) ' of ' ...
-            num2str(length(framenums))]);
-    end
+        case 'No',
+            disp(''); disp('Hmm take a look at the code to figure out what went wrong.');
+            beep
+            return
+    end % switch
     
-    % Calculate mean from sum image
-    imMean = uint8(round(imSum./length(framenums)));
-    
-    % Calculate mean from sum image (stable roi)
-    imRoiMean = uint8(round(imSum_roi./length(framenums)));
+    close(f)    
+    clear ButtonName
     
     % Save image image data (roi)
     save([data_path filesep 'meanRoiImageData'],'imRoiMean');
@@ -89,6 +66,8 @@ if force_redo ||  isempty(dir([data_path filesep 'meanRoiImageData.mat']))
     save([data_path filesep 'meanImageData'],'imMean');
     
 else
+    disp('Loading mean images . . .')
+    
     % Load imRoiMean
     load([data_path filesep 'meanRoiImageData.mat'])
     
@@ -96,94 +75,80 @@ else
     load([data_path filesep 'meanImageData.mat'])
 end
 
+disp(' ');
+
 
 %% Mean image subtraction (roi)
 
-if force_redo || isempty(dir([data_path filesep 'roiSequence.mat']))
+if 1 %force_redo || isempty(dir([data_path filesep 'roiSequence.mat']))
     
-    framenums = Centroid.frames;
-    
-    % Do not downsample the images
-    dSample = 0;
-    
-    % Loop thru frames
-    for i = 1:length(framenums)
-        
-        % Current frame
-        cFrame = framenums(i);
-        
-        % Current parameters
-        x = Centroid.x_pix(i);
-        y = Centroid.y_pix(i);
-        r = Centroid.r_pix;
-        tform = Rotation(i).tform_roi;
-        theta = Centroid.theta;
-        
-        % Current image
-        im = getFrame(vid_path,v,cFrame,imInvert,'gray');
-        
-        % Extract roi
-        [bw_mask,im_roi,roi_rect,bw_roi,imStable] = giveROI('circular',...
-            im,x,y,r,theta,dSample,tform);
+    % Get sequence of roi with subtracted mean images
+    im_seq = giveSequence(vid_path,v,'mean roi sub','enhance contrast',...
+        imRoiMean,Centroid.frames,Centroid,Rotation,0,1);
 
-        % Adjust contrast 
-        if i==1
-            imRoiMean = imadjust(adapthisteq(imRoiMean));
-        end
-        imStable = imadjust(adapthisteq(imStable));
+    % Prompt to proceed
+    ButtonName = questdlg('Ready to play sequence?', ...
+        '', 'Yes','Cancel', 'Yes');
+    
+    switch ButtonName,
+        case 'Cancel',
+            disp(''); disp('Quitting analysis . . .');beep
+            return
+    end % switch
+    clear ButtonName
+      
+    f = figure;
+    
+    while true
         
-        % Subtract background
-        warning off
-        if imInvert
-            im_seq(:,:,i) = imadjust(uint8(imcomplement(imsubtract(imRoiMean,imStable))));
-        else
-            im_seq(:,:,i) = imadjust(uint8(imcomplement(imsubtract(imStable,imRoiMean))));
-        end
-        warning on
-        
-        % Visualize
-        if 0
-            subplot(2,2,1)
-            imshow(imStable,'InitialMagnification','fit');
-            title('imStable')
-            subplot(2,2,2)
-            imshow(imRoiMean,'InitialMagnification','fit');
-            title('mean image')
-            subplot(2,2,3)
-            warning off
-            imshowpair(imStable,imRoiMean)
-            warning on
-            title('stable over mean image')
-            subplot(2,2,4)
-            imshow(im_seq(:,:,i),'InitialMagnification','fit');
-            title('mean image subtraction')
-            %title([num2str(cFrame)]
-            pause(0.001);
+        % Loop thru frames
+        for i = 1:size(im_seq,3)
+            
+            % Display image
+            imshow(im_seq(:,:,i),'InitialMag','fit');
+            
+            % Pause to render
+            pause(0.1)           
         end
         
-        % Clear for next
-        clear x y r tform cFrame im theta im bw_mask im_roi roi_rect 
-        clear bw_roi imStable
+        % Prompt to proceed
+        ButtonName = questdlg('Proceed to next step?', ...
+            '', 'Yes','Replay','Cancel', 'Yes');
         
-        % Update status
-        disp(['Mean image subtraction: done ' num2str(i) ' of ' ...
-            num2str(length(framenums))]);       
+        switch ButtonName,
+            case 'Yes'
+                close(f)
+                break
+                
+            case 'Cancel',
+                disp(''); disp('Quitting analysis . . .');beep
+                return
+        end % switch
+        clear ButtonName
+        
     end
     
     % Save image image data
     save([data_path filesep 'roiSequence'],'im_seq');
     
 else
-    % Load imRoiMean
+    
+    disp('Loading im_seq . . .')
+    
+    % Load im_seq
     load([data_path filesep 'roiSequence.mat'])
 end
 
+disp(' ');
 
-%% Interactive mode
+
+%% Interactive mode: select threshold and area limits
 
 if force_redo || isempty(dir([data_path filesep 'blobParam.mat']))
     
     justReplay = 0;
+    
+    f = figure;
     
     while true
         
@@ -220,6 +185,9 @@ if force_redo || isempty(dir([data_path filesep 'blobParam.mat']))
             blobParam.areaMin = areaMin;
             blobParam.areaMax = areaMax;
             
+            % Close figure window
+            close(f)
+            
             % Save params
             save([data_path filesep 'blobParam.mat'],'blobParam')
             
@@ -232,104 +200,70 @@ if force_redo || isempty(dir([data_path filesep 'blobParam.mat']))
     end
     
 else
+    disp('Loading blobParam . . .');
+    
     % Load blobParam, parameter values
     load([data_path filesep 'blobParam.mat'])
 end
 
+disp(' ');
+
 
 %% Transform blobs back to global FOR
 
-if isempty(dir([data_path filesep 'Blob data.mat']))
+if force_redo || isempty(dir([data_path filesep 'Blob data.mat']))
     
-    framenums = Centroid.frames;
-    
-    for i = 1:length(Rotation)
-        
-        % Get roi image
-        cIm = im_seq(:,:,i);
-        
-        % Find blobs in roi
-        [props,bw_roi,areas,xB,yB] = findBlobs(cIm,blobParam.tVal,...
-            'area',blobParam.areaMin,blobParam.areaMax);
-        
-        rMin = inf;
-        rMax = 0;
-        
-        for j = 1:length(props)
-            %rMin = min([rMin props(j).MinorAxisLength/2]);
-            %rMax = max([rMax props(j).MajorAxisLength/2]);
-            rVals(j,1) = props(j).MajorAxisLength/2;
-        end
-        
-        rMax = ceil(quantile(rVals,0.9));
-        rMin = floor(rMax/3);
-        
-        
-        % Extract current parameters for whole image
-        cFrame = framenums(i);
-        x = Centroid.x_pix(i);
-        y = Centroid.y_pix(i);
-        r = Centroid.r_pix;
-        theta = Centroid.theta;
-        tform = Rotation(i).tform_roi;
-        
-        % Current whole frame
-        im = getFrame(vid_path,v,cFrame,imInvert,'gray');
-        
-        % Get roi data
-        [bw_mask,im_roi,roi_rect,bw_roi_mask] = giveROI('circular',im,x,y,r,theta,0);
-        
-        % Blobs in the G FOR
-        bw_blobs_G = transCoord2d('bw L2G',tform,bw_roi,bw_mask,bw_roi_mask);
-        
-%         [cntrs,radii] = imfindcircles(bw_roi,[max([1 floor(rMin)]) ceil(rMax)],...
-%                                       'ObjectPolarity','bright');
-%           viscircles(cntrs, radii,'Color','b');  
-
-        % Survey blobs
-        propsG = regionprops(bw_blobs_G,'Centroid','Area',...
-            'MajorAxisLength','MinorAxisLength',...
-            'PixelIdxList','PixelList');
-        
-        % Store blob data
-        B(i).propsG = propsG;
-        B(i).propsL = props;
-        
-        if 0
-            % Current whole frame
-            imI = getFrame(vid_path,v,cFrame,~imInvert,'gray');
-            
-            h = imshow(imI,'InitialMag','fit');
-            hold on
-            
-            % Make a truecolor all-green image, make non-blobs invisible
-            green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
-            h = imshow(green,'InitialMag','fit');
-            set(h, 'AlphaData', bw_blobs_G)
-            
-            title(['Frame ' num2str(framenums(i))]);
-            
-            pause(0.001)
-            
-        else
-            disp(['Overlaying blobs: ' num2str(i) ' of ' num2str(length(Rotation))]);
-        end
-        
-        clear props propsG bw_mask im_roi roi_rect bw_roi_mask bw_roi 
-        clear areas xB yB
-    end
+    % Get blobs
+    B = anaBlobs(vid_path,v,'G&L props',...
+        im_seq,Centroid.frames,Centroid,Rotation,blobParam,imInvert);
     
     % Save image image data
     save([data_path filesep 'Blob data'],'B');
     
 else
-    % Load 'bwG_seq'
+    
+    disp('Loading B structure . . .');
+    
+    % Load 'B' structure
     load([data_path filesep 'Blob data']);
 end
 
+disp(' ');
+
+
 %% Filter out moving blobs
 
-winLen = 10;
+%TODO: Fix the code below . . .
+
+if 1 %force_redo || isempty(dir([data_path filesep 'Blob, filtered data.mat']))
+    
+    winLen = 10;
+    
+    %tVal = imInteract(imcomplement(imStackScore),'threshold');
+    tVal = 0.5871;
+    
+    % Find blobs that don't move in global FOR
+    Bf = anaBlobs(vid_path,v,'filter motion',B,winLen,Centroid,...
+        Rotation,blobParam,tVal);
+    
+    aniData(vid_path,v,'blobs G&L',Bf)
+    
+    % Save blob data
+    save([data_path filesep 'Blob, filtered data'],'Bf');
+    
+else
+     disp('Loading Bf structure . . .');
+    
+    % Load 'Bf' structure
+    load([data_path filesep 'Blob, filtered data']);
+end
+
+disp(' ');disp(' ')
+
+return
+
+bw_seq = giveSequence(vid_path,v,'filter blob motion',im_seq,B,fr_num,...
+    winLen,'none',Centroid,Rotation,dSample,imInvert)
 
 framenums = Centroid.frames;
 

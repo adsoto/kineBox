@@ -2,14 +2,11 @@ function example_starjuv
 
 %% Parameters
 
-% Factor by which the blob diameter gets multiplied for roi
-blobMultiple = 1.7;
-
 % Whether to make a video of the data
 makeVid = 1;
 
 % Re-run whole analysis
-forceReRun = 0;
+forceReRun = 1;
 
 % Frame rate (fps)
 frameRate = 30;
@@ -26,6 +23,9 @@ imInvert = 1;
 % Visualize steps in analysis
 visSteps = 0;
 
+% Number of points to define the region of interest
+numroipts = 200;
+
 
 %% Preliminaries
 
@@ -33,64 +33,274 @@ visSteps = 0;
 paths = givePaths;
 
 % Particular sequence being analyzed
-path_seq = ['CSULB juvenile' ...
-    filesep 'SS18' filesep 'timelapse7'];
+path_seq = ['CSULB juvenile' filesep 'SS18' filesep 'timelapse7'];
 
 % Sample for analysis
-path_vid = [paths.vid_root filesep 'Seastars' filesep path_seq];
+vid_path = [paths.vid_root filesep 'Seastars' filesep path_seq];
 
 % Path for data
-path_data = [paths.data_root filesep path_seq];
+data_path = [paths.data_root filesep path_seq];
 
 % Load video info (v)
-v = defineVidObject(path_vid,'JPG');
+v = defineVidObject(vid_path,'JPG');
 
 % Make data directory, if necessary
-if isempty(dir(path_data))
-    mkdir(path_data);
+if isempty(dir(data_path))
+    mkdir(data_path);
 end
+
+
+%% Find mean image
+
+if forceReRun || isempty(dir([data_path filesep 'meanImageData.mat'])) 
+    
+     % Make mean images 
+    imMean = motionImage(vid_path,v,'mean','none');
+     
+    % Save mean image data
+    save([data_path filesep 'meanImageData'],'imMean');
+    
+else
+    disp('Loading mean image . . .')
+    
+    % Load imMean
+    load([data_path filesep 'meanImageData.mat'])
+end
+
+disp(' ');
+
+
+%% Interactive mode: Select whether to use mean image
+
+if isempty(dir([data_path filesep 'Initial conditions.mat'])) || forceReRun
+    
+    % First image, with mean image subtraction
+    im0Mean = getFrame(vid_path,v,v.UserData.FirstFrame,imInvert,'gray',imMean);
+    
+    % First image
+    im0NoMean = getFrame(vid_path,v,v.UserData.FirstFrame,imInvert,'gray');
+    
+    f = figure;
+    subplot(1,2,1)
+    imshow(imadjust(im0Mean),'InitialMag','fit')
+    title('Mean image subtracted')
+    
+    subplot(1,2,2)
+    imshow(imadjust(im0NoMean),'InitialMag','fit')
+     title('No mean image subtracted')
+    
+    b = questdlg('Are the tube feet more visible on the right or left image?',...
+        '','Left','Right','Cancel','Right');
+    
+    if strcmp(b,'Cancel')
+        return
+        
+    elseif strcmp(b,'Left')
+        
+        im = im0Mean;
+        useMean = 1;
+        
+    elseif strcmp(b,'Right')   
+        
+        imMean = [];
+        useMean = 0;
+        
+        % Overwrite image image data
+        save([data_path filesep 'meanImageData'],'imMean');
+        
+        im = im0NoMean;
+    end
+    
+    close(f);
+    
+    % Initial position
+    disp(' ')
+    disp('Select animal to be tracked')
+    [x,y] = imInteract(im,'points',1);
+    
+    % Threshold
+    disp(' ')
+    disp('Select threshold')
+    tVal = imInteract(im,'threshold');
+    
+    % Radius
+    disp(' ')
+    disp('Select roi radius')
+    r = imInteract(im,'radius',x,y);
+    
+    % Store data
+    iC.x       = x;
+    iC.y       = y;
+    iC.tVal    = tVal;
+    iC.r       = r;
+    iC.useMean = useMean;
+    
+    % Save data
+    save([data_path filesep 'Initial conditions'],'iC')
+    
+    clear im useMean im0Mean im0NoMean x y tVal r
+else
+    
+    disp('Loading initial condition data . . .')
+
+    % Load initial conditions, iC
+    load([data_path filesep 'Initial conditions.mat']);
+    
+    % Load imMean
+    load([data_path filesep 'meanImageData.mat'])
+    
+end
+
+disp(' ')
        
 
 %% Track centroid coordinates
 
-if isempty(dir([path_data filesep 'Centroid.mat'])) || forceReRun
+if isempty(dir([data_path filesep 'Centroid.mat'])) || forceReRun
+    
+    % Region of interest for first frame
+    roi0 = giveROI('define','circular',numroipts,iC.r,iC.x,iC.y);
     
     % Run tracker code for centroid
-    Centroid = tracker(path_vid,v,'threshold translation',blobMultiple,...
-        imInvert,visSteps);
+    Centroid = tracker(vid_path,v,imInvert,'threshold translation',...
+        roi0,iC.tVal);
     
     % Save data
-    save([path_data filesep 'Centroid'],'Centroid')
+    save([data_path filesep 'Centroid'],'Centroid')
     
     close
 else
     
+    disp('Loading Centroid coordinates . . .')
+
     % Load 'Centroid'
-    load([path_data filesep 'Centroid.mat']);
+    load([data_path filesep 'Centroid.mat']);
     
 end
+
+disp(' ')
 
 
 %% Track rotation
 
-if isempty(dir([path_data filesep 'Rotation.mat'])) || forceReRun
+if isempty(dir([data_path filesep 'Rotation.mat'])) || forceReRun
+    
+    % Region of interest for first frame
+    roi0 = giveROI('define','circular',numroipts,iC.r,iC.x,iC.y);
     
     % Run tracker code for centroid
-    Rotation = tracker(path_vid,v,'body rotation',blobMultiple,imInvert,...
-                       visSteps,Centroid.frames,Centroid);
+    Rotation = tracker(vid_path,v,imInvert,'body rotation',roi0,Centroid,imMean);
     
     % Save data
-    save([path_data filesep 'Rotation'],'Rotation')
+    save([data_path filesep 'Rotation'],'Rotation')
     
 else
     % Load 'Rotation'
-    load([path_data filesep 'Rotation.mat']);
+    load([data_path filesep 'Rotation.mat']);
 end
+
+
+%% Store coordinate transformations in S structure
+
+% Region of interest for first frame
+roi0 = giveROI('define','circular',numroipts,iC.r,iC.x,iC.y);
+
+% Create coordinate transformation structure 
+S = defineSystem2d('roi',roi0,Centroid,Rotation);
+
+
+%% Visualize and approve results up to this point
+
+if 0
+    % Make movie of tracking up to this point
+    M = aniData(vid_path,v,imInvert,'Centroid & Rotation',S);
+    
+    while true
+        
+        % Prompt to proceed
+        ButtonName = questdlg('Does the tracking look good?', ...
+            '', 'Yes, proceed', 'No, Cancel', 'Replay animation', 'Yes, proceed');
+        
+        switch ButtonName,
+            case 'No, Cancel',
+                disp(''); disp('Quitting analysis . . .');beep
+                return
+                
+            case 'Yes, proceed',
+                
+                clear M 
+                
+                break
+        end % switch
+        
+        clear ButtonName
+        
+        movie(M)
+    end
+end
+
+
+%% Make mean image of roi 
+
+if 1 %forceReRun || isempty(dir([data_path filesep 'meanRoiImageData.mat']))
+    
+     % Make mean images 
+    [imMean,imRoiMean] = motionImage(vid_path,v,'mean roi','none',100,S,0);
+  
+    % Plot mean images
+    f = figure;
+    subplot(3,2,[1 3])
+    imshow(imMean,'InitialMag','fit');
+    title('Mean image')
+    subplot(3,2,5)
+    imhist(imMean)
+    
+    subplot(3,2,[2 4])
+    imshow(imRoiMean,'InitialMag','fit');
+    title('Mean roi image')
+    subplot(3,2,6)
+    imhist(imRoiMean)
+    
+    % Prompt to proceed
+    ButtonName = questdlg('Do the mean images look good?', ...
+        '', 'Yes, proceed', 'No', 'Cancel', 'Yes, proceed');
+    
+    switch ButtonName,
+        case 'Cancel',
+            disp(''); disp('Quitting analysis . . .');beep
+            return
+            
+        case 'No',
+            disp(''); disp('Hmm take a look at the code to figure out what went wrong.');
+            beep
+            return
+    end % switch
+    
+    close(f)    
+    clear ButtonName
+    
+    % Save image image data (roi)
+    save([data_path filesep 'meanRoiImageData'],'imRoiMean');
+    
+    % Save image image data
+    save([data_path filesep 'meanImageData'],'imMean');
+    
+else
+    disp('Loading mean images . . .')
+    
+    % Load imRoiMean
+    load([data_path filesep 'meanRoiImageData.mat'])
+    
+    % Load imMean
+    load([data_path filesep 'meanImageData.mat'])
+end
+
+disp(' ');
 
 
 %% Isolate tube feet
 
-isolateRoiMotion(path_vid,v,path_data,Rotation,Centroid,imInvert)
+isolateRoiMotion(vid_path,v,data_path,Rotation,Centroid,imInvert)
 
 
 return
@@ -131,12 +341,12 @@ ylabel('Orientation (deg)')
 if do_animate
     
     % Make movie
-    M = tracker(path_vid,v,'visualize',blobMultiple,0,Centroid.frames,Centroid,...
+    M = tracker(vid_path,v,'visualize',blobMultiple,0,Centroid.frames,Centroid,...
         Rotation,makeVid);
     
     % Write movie to disk
     if makeVid
-        vid_save_path = uigetdir(path_data,'Save movie');
+        vid_save_path = uigetdir(data_path,'Save movie');
         vInfo = VideoWriter([vid_save_path filesep 'video.mp4'],'MPEG-4');
         vInfo.FrameRate = 15;
         open(vInfo)

@@ -1,19 +1,22 @@
-function tform = defineSystem2d(inType,varargin)
+function varargout = defineSystem2d(coordType,varargin)
 % Defines coordinate local system (L) within global system (G)
-%    inType - type of data used to define coordinate system
-%    ('x-axis','y-axis')
+% S = defineSystem2d(coordType)
+%    S - structure that defines a coordinate system
+%    coordType - type of data used to define coordinate system
+%    ('x-axis','y-axis','roi')
 %
-% tform = defineSystem2d('roi tform',rect,tform)
-%    rect - vector defining the roi in G frame
-%    tform - transformation matrix for rotation within the roi
-%
-% tform = defineSystem2d('x-axis',origin,axCoord)
+% S = defineSystem2d('x-axis',origin,axCoord)
 %    origin  - a vector of 2 coordinates that define origin L in G
 %    axCoord - a vector of 2 coordinates defining x-axis for L in G
 %
-% tform = defineSystem2d('y-axis',origin,axCoord)
+% S = defineSystem2d('y-axis',origin,axCoord)
 %    origin  - a vector of 2 coordinates that define origin L in G
 %    axCoord - a vector of 2 coordinates defining y-axis for L in G
+%
+% S = defineSystem2d('full roi',rect,tform)
+% Defines a region-of-interest within an image
+%    rect - vector defining the roi in G frame
+%    tform - transformation matrix for rotation within the roi
 %
 % Code developed by McHenryLab at UC Irvine
 
@@ -21,7 +24,7 @@ function tform = defineSystem2d(inType,varargin)
 %% Translate inputs
 
 % If using axis coordinates
-if strcmp(inType,'x-axis') || strcmp(inType,'y-axis')
+if strcmp(coordType,'x-axis') || strcmp(coordType,'y-axis')
     
     % Set origin
     origin = varargin{1};
@@ -52,24 +55,25 @@ if strcmp(inType,'x-axis') || strcmp(inType,'y-axis')
     % Translate wrt origin
     axCoord(1) = axCoord(1) - origin(1);
     axCoord(2) = axCoord(2) - origin(2);
-
     
+elseif strcmp(coordType,'roi')    
     
-elseif strcmp(inType,'roi tform')    
     % Region of interest rectangle
-    rect = varargin{1};
+    roi0 = varargin{1};
     
-    % Set axis
-    tform = varargin{2};
+    % 
+    Centroid = varargin{2};
+    
+    Rotation = varargin{3};
     
 else
-    error('inType not recignized');
+    error('coordType not recognized');
 end
 
 
 %% Define system from x-axis coordinate
 
-if strcmp(inType,'x-axis')
+if strcmp(coordType,'x-axis')
     
     % Define xaxis
     xaxis = axCoord;
@@ -90,7 +94,7 @@ end
 
 %% Define system from y-axis coordinate
 
-if strcmp(inType,'y-axis')
+if strcmp(coordType,'y-axis')
     
     % Define xaxis
     yaxis = axCoord;
@@ -111,26 +115,62 @@ if strcmp(inType,'y-axis')
     zaxis = cross(xaxis,yaxis);
 end
 
+
 %% Define system for an roi
 
-if strcmp(inType,'roi tform')    
-   
-    % Redefine origin, leave the rotation matrix
-    tform.T(3,:) = [rect(1) rect(2) 1];
+if strcmp(coordType,'roi')
     
-    % Coordinates for roi
-    %tform.roi = rect;
+    if length(Rotation)~=length(Centroid.x)
+        error('mismatch in length of data sources');
+    end
     
+    % Store general parameters
+    S.frames        = Centroid.frames;
+    S.xCntr         = Centroid.x;
+    S.yCntr         = Centroid.y;
+%    S.roi.r         = roi0.r;
+%     S.roi_shape     = roi0.shape;
+%     S.roi.xPerimL   = roi0.xPerimL;
+%     S.roi.yPerimL   = roi0.yPerimL;
+%     S.roi.theta     = roi0.theta;
+    
+    % Loop thru frames, store varying parameters
+    for i = 1:length(Rotation)
+        
+        S.tform(:,:,i) = Rotation(i).tform_roi;
+        
+        % Number of roi points
+        numroipts = length(roi0.xPerimG);
+        
+        % Cooridnates of centroid
+        xC = Centroid.x(i);
+        yC = Centroid.y(i);
+        
+        % Current roi
+        S.roi(i) = giveROI('define','circular',numroipts,roi0.r,xC,yC);
+%         
+%         % Store roi data
+%         
+%         S.roi(i).xCntr    = Centroid.x(i);
+%         S.roi(i).yCntr    = Centroid.y(i);
+%         S.roi(i).xPerimG  = tmp.xPerimG;
+%         S.roi(i).yPerimG  = tmp.yPerimG;
+%         S.roi(i).         = tmp.rect;       
+    end
 end
+
 
 %% Package system for output
 
-if strcmp(inType,'x-axis') || strcmp(inType,'y-axis')
+if strcmp(coordType,'x-axis') || strcmp(coordType,'y-axis')
     % Create rotation matrix (from inertial axes to local axes)
     R = [xaxis; yaxis; [origin 1]];
        
     % Format trans matrix for matlab
-    tform = affine2d(R);
+    S.tform = affine2d(R);
 end
+
+% Output
+varargout{1} = S;
 
 

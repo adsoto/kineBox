@@ -50,7 +50,7 @@ if strcmp(bMode,'area')
         'MajorAxisLength','MinorAxisLength',...
         'PixelIdxList','PixelList');
     
-    areas = [];
+    areas = []; 
     
     % Loop thru blobs
     for i = 1:length(props)
@@ -74,6 +74,11 @@ if strcmp(bMode,'area')
         end        
     end
     
+    % If no blobs, return empty variable
+    if j==1
+        propOut = [];
+    end
+    
 elseif strcmp(bMode,'coord')
     
     bw = bwselect(bw,x,y);
@@ -83,15 +88,16 @@ elseif strcmp(bMode,'coord')
         'MajorAxisLength','MinorAxisLength',...
         'PixelIdxList','PixelList');
     
-    if length(props)~=1
+    if length(propOut)~=1
         error('Need to select one (and only one) blob')
     end
     
     % Add to area
-    areas= props.Area;
+    areas = propOut.Area;
             
     % Add white pixels for current blob
-    bwOut(props.PixelIdxList) = 1;
+    bwOut(propOut.PixelIdxList) = 1;
+
 end
 
  % Trace perimeter
