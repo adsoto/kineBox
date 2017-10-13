@@ -65,16 +65,16 @@ if isfield(v.UserData,'FileInfo');
         im = rgb2gray(im);
     end
     
+    % Invert, if requested
+    if imInvert==1
+        im = imcomplement(im);
+    end
+    
     % Subtract mean image, if present
     if ~isempty(imMean)
         im = imsubtract(im,imMean);
     end
     
-    % Invert, if requested
-    if imInvert
-        im = imcomplement(im);
-    end
-  
 % If a video file . . .
 else
     if nargin > 2

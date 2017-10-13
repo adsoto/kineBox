@@ -6,7 +6,7 @@ function example_starjuv
 makeVid = 1;
 
 % Re-run whole analysis
-forceReRun = 1;
+forceReRun = 0;
 
 % Frame rate (fps)
 frameRate = 30;

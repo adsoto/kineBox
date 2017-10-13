@@ -172,18 +172,18 @@ for i = 1:length(fr_num)
         
     elseif strcmp(imType,'mean') 
         % Get current frame
-        imCurr       = getFrame(vid_path,v,cFrame,'gray');       
+        imCurr       = getFrame(vid_path,v,cFrame,0,'gray');       
     
     elseif strcmp(imType,'mean roi') 
         % Get current frame
-        im       = getFrame(vid_path,v,cFrame,'gray');     
+        im       = getFrame(vid_path,v,cFrame,0,'gray');     
         
         imCurr = giveROI('stabilized',im,S.roi(i),0,S.tform(:,:,i));
         
     end
     
     % Convert to grayscale
-    imCurr = rgb2gray(imCurr);
+    %imCurr = rgb2gray(imCurr);
     
     if strcmp(imType,'bw static')
         % Start with blank
