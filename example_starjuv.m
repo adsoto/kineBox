@@ -55,7 +55,7 @@ end
 if forceReRun || isempty(dir([data_path filesep 'meanImageData.mat'])) 
     
      % Make mean images 
-    imMean = motionImage(vid_path,v,'mean','none');
+    imMean = motionImage(vid_path,v,'mean','none',imInvert);
      
     % Save mean image data
     save([data_path filesep 'meanImageData'],'imMean');
@@ -208,12 +208,14 @@ roi0 = giveROI('define','circular',numroipts,iC.r,iC.x,iC.y);
 % Create coordinate transformation structure 
 S = defineSystem2d('roi',roi0,Centroid,Rotation);
 
+clear iC Centroid Rotation roi0
+
 
 %% Visualize and approve results up to this point
 
 if 0
     % Make movie of tracking up to this point
-    M = aniData(vid_path,v,imInvert,'Centroid & Rotation',S);
+    M = aniData(vid_path,v,imInvert,'Centroid & Rotation',S,1);
     
     while true
         
@@ -242,27 +244,19 @@ end
 
 %% Make mean image of roi 
 
-if 1 %forceReRun || isempty(dir([data_path filesep 'meanRoiImageData.mat']))
+if forceReRun || isempty(dir([data_path filesep 'meanRoiImageData.mat']))
     
      % Make mean images 
-    [imMean,imRoiMean] = motionImage(vid_path,v,'mean roi','none',100,S,0);
-  
+    imRoiMean = motionImage(vid_path,v,'mean roi','none',imInvert,100,S,0);
+    
     % Plot mean images
     f = figure;
-    subplot(3,2,[1 3])
-    imshow(imMean,'InitialMag','fit');
-    title('Mean image')
-    subplot(3,2,5)
-    imhist(imMean)
-    
-    subplot(3,2,[2 4])
+
     imshow(imRoiMean,'InitialMag','fit');
     title('Mean roi image')
-    subplot(3,2,6)
-    imhist(imRoiMean)
     
     % Prompt to proceed
-    ButtonName = questdlg('Do the mean images look good?', ...
+    ButtonName = questdlg('Does the roi mean image look good?', ...
         '', 'Yes, proceed', 'No', 'Cancel', 'Yes, proceed');
     
     switch ButtonName,
@@ -280,10 +274,7 @@ if 1 %forceReRun || isempty(dir([data_path filesep 'meanRoiImageData.mat']))
     clear ButtonName
     
     % Save image image data (roi)
-    save([data_path filesep 'meanRoiImageData'],'imRoiMean');
-    
-    % Save image image data
-    save([data_path filesep 'meanImageData'],'imMean');
+    save([data_path filesep 'meanRoiImageData'],'imRoiMean');   
     
 else
     disp('Loading mean images . . .')
@@ -291,16 +282,226 @@ else
     % Load imRoiMean
     load([data_path filesep 'meanRoiImageData.mat'])
     
-    % Load imMean
-    load([data_path filesep 'meanImageData.mat'])
 end
 
 disp(' ');
 
 
+%% Interactive mode: select threshold and area limits
+
+if forceReRun || isempty(dir([data_path filesep 'blobParam.mat']))
+    
+    justReplay = 0;
+    
+    f = figure;
+    
+    dSample = 0;
+
+    while true
+        
+        if ~justReplay
+            
+            i = 1;
+            
+            % Full-frame image
+            im = getFrame(vid_path,v,S.frames(i),imInvert,'gray');  
+            
+            % Roi image, mean image subtracted
+            im_roi = giveROI('stabilized',im,S.roi(i),dSample, ...
+                S.tform(:,:,i),imRoiMean);
+            
+            % Find threshold
+            tVal = imInteract(im_roi,'threshold');
+            %tVal = 0.8349;
+            
+            % Find area
+            [areaMin,areaMax] = imInteract(im_roi,'area',tVal);
+            %areaMin = 996.4110;areaMax = 2.3445e+04;
+            
+            M = aniData(vid_path,v,imInvert,'blobs L simple',S,tVal,areaMin,...
+            areaMax,1,imRoiMean,dSample);
+        
+        else
+            movie(M)
+        end
+        
+        % Reset
+        justReplay = 0;
+        
+        % Prompt
+        choice = questdlg('Do threshold and area values look good?', ...
+            '', 'Yes, proceed','No, redo','Replay','Yes, proceed');
+        
+        % Break, if good
+        if strcmp(choice,'Yes, proceed')
+            
+            % Store parameters
+            blobParam.tVal    = tVal;
+            blobParam.areaMin = areaMin;
+            blobParam.areaMax = areaMax;
+            blobParam.AR_max  = 1.5;
+            
+            % Close figure window
+            close(f)
+            
+            clear M tVal areaMin areaMax im im_roi i
+            
+            % Save params
+            save([data_path filesep 'blobParam.mat'],'blobParam')
+            
+            % Break loop
+            break
+            
+        elseif strcmp(choice,'Replay')
+            justReplay = 1;
+
+        end
+    end
+    
+else
+    disp('Loading blobParam . . .');
+    
+    % Load blobParam, parameter values
+    load([data_path filesep 'blobParam.mat'])
+end
+
+disp(' ');
+
+
+%% Transform blobs back to global FOR
+
+if forceReRun || isempty(dir([data_path filesep 'Blob data.mat']))
+    
+    % Downsample
+    dSample = 0;
+    
+    %blobParam.AR_max  = 1.5;
+    
+    % Get blobs
+    B = anaBlobs(vid_path,v,'G&L props',S,blobParam,imInvert,dSample,...
+                 imRoiMean);
+    
+    % Save image image data
+    save([data_path filesep 'Blob data'],'B');
+    
+else
+    
+    disp('Loading B structure . . .');
+    
+    % Load 'B' structure
+    load([data_path filesep 'Blob data']);
+end
+
+disp(' ');
+
+
+%% Interactive mode: Select frame interval
+
+if forceReRun || isempty(dir([data_path filesep 'winDur.mat']))
+    
+    % Whether to downsample the image
+    dSample = 0;
+    
+    f = figure;
+    
+    winDur = 10;
+    
+    % Frame index
+    idx = 2+ceil(winDur/2);
+    
+    while true
+        
+        % Starting and ending frames
+        frStart = S.frames(idx-floor(winDur/2));
+        frEnd   = S.frames(idx+ceil(winDur/2));
+        
+        % Image of static motion
+        imB = motionImage(vid_path,v,'bw static',[frStart:frEnd],B);
+        
+        % Full-frame image
+        im1 = getFrame(vid_path,v,frStart,imInvert,'gray');
+        
+        % Full-frame image
+        im2 = getFrame(vid_path,v,frEnd,imInvert,'gray');
+        
+        subplot(1,2,1)
+        imshowpair(im1,im2)
+        title(['Window length = ' num2str(winDur)])
+        
+        subplot(1,2,2)
+        imshow(imB,'InitialMag','fit')
+        title(['Window length = ' num2str(winDur)])
+ 
+        % Prompt
+        b = questdlg('Does the window length look good?', '', ...
+                         'Yes, proceed', 'No, set', 'Cancel', 'Yes, proceed');
+        if strcmp(b,'Yes, proceed')
+            close(f)
+            break
+            
+        elseif strcmp(b,'No, set')
+            an = inputdlg({'Window length (frames)'},'',1,{num2str(winDur)});
+            winDur = str2num(an{1});
+
+        else
+            return
+        end
+
+        clear im1 im2 frStart frEnd b an 
+    end
+    
+    % Prompt for threshold
+    winThresh = imInteract(imB,'threshold');
+    
+    % Save winDur
+    save([data_path filesep 'winDur'],'winDur');  
+    
+    % Save winDur
+    save([data_path filesep 'winThresh'],'winThresh');  
+    
+else
+    disp('Loading winDur . . .');
+    
+    % Load winDur, parameter values
+    load([data_path filesep 'winDur.mat'])
+    
+    % Load winThresh, parameter values
+    load([data_path filesep 'winThresh.mat'])
+end
+
+disp(' ');
+
+
+%% Filter out moving blobs
+
+if 1 %forceReRun || isempty(dir([data_path filesep 'Blob, filtered data.mat']))
+
+    % Find blobs that don't move in global FOR
+    Bf = anaBlobs(vid_path,v,'filter motion',B,winDur,S,blobParam,winThresh);
+    
+    % Save blob data
+    save([data_path filesep 'Blob, filtered data'],'Bf','-v7.3');
+    
+else
+     disp('Loading Bf structure . . .');
+    
+    % Load 'Bf' structure
+    load([data_path filesep 'Blob, filtered data']);
+end
+
+disp(' ');disp(' ')
+
+
+%% Display results
+
+disp('Creating movie . . .')
+M = aniData(vid_path,v,imInvert,'blobs G&L',Bf,0);
+
+rrr=2
+
 %% Isolate tube feet
 
-isolateRoiMotion(vid_path,v,data_path,Rotation,Centroid,imInvert)
+%isolateRoiMotion(vid_path,v,data_path,Rotation,Centroid,imInvert)
 
 
 return

@@ -10,6 +10,9 @@ function im = getFrame(vid_path,v,fr_num,imInvert,clrMode,imMean)
 %
 % Developed by McHenryLab at UC Irvine
 
+
+%% Read frame in an image sequence
+
 % If it is an image sequence . . .
 if isfield(v.UserData,'FileInfo');
     
@@ -72,14 +75,25 @@ if isfield(v.UserData,'FileInfo');
     
     % Subtract mean image, if present
     if ~isempty(imMean)
-        im = imsubtract(im,imMean);
-    end
+        %im = imsubtract(im,imMean);
+
+        im = imadjust(imcomplement(imsubtract(imMean,im)));
     
-% If a video file . . .
-else
-    if nargin > 2
-        warning('Cannot specify image number for a video.  Reading next image.')
     end
-    % Read next available frame
+end    
+    
+
+%% Read frame from a movie file
+
+if ~isfield(v.UserData,'FileInfo')
+    
+    % Adjust items in 'v'
+    v.Path       = vid_path; 
+    v.CurrentTime = fr_num./v.FrameRate;
+    
+     % Read next available frame
     im = readFrame(v);
+    
+end
+
 end

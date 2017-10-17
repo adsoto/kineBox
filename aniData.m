@@ -7,9 +7,15 @@ function varargout = aniData(vid_path,v,imInvert,opType,varargin)
 %  opType - designates the type of operation ('blobs G&L')
 %  imInvert - logical that designates whether to invert the image
 %
-% M = anaBlobs(vid_path,v,'blobs G&L',B)
+% M = anaBlobs(vid_path,v,'blobs G&L',B,imVis)
 % Overlays blob data onto video frames in local and global FOR
 %   B - Blob data structure (created by anaBlobs)
+%   imVis - logical indicating whether to display frames as they are put
+%   together.
+
+%% Parameters
+
+alphaLevel = 0.75;
 
 
 %% Parse inputs
@@ -18,11 +24,33 @@ if strcmp(opType,'blobs G&L')
     
     % Blob data structure
     B = varargin{1};
-   
-    
+      
+      j = 1;
     for i = 1:length(B)
-        frames(i,1) = B(i).frames;
+        if ~isempty(B(i).fr_num)
+            frames(j,1) = B(i).fr_num;
+            j = j + 1;
+        end
     end
+    
+    if nargin > 5
+        imVis = varargin{2};
+    else
+        imVis = 1;
+    end
+    
+elseif strcmp(opType,'blobs L simple')
+   
+    S          = varargin{1};
+    tVal       = varargin{2};
+    areaMin    = varargin{3};
+    areaMax    = varargin{4};
+    imVis      = varargin{5};
+    imRoiMean  = varargin{6};
+    dSample    = varargin{7};
+    
+    frames = S.frames;
+      
     
 elseif strcmp(opType,'Centroid tracking')
        
@@ -30,46 +58,158 @@ elseif strcmp(opType,'Centroid tracking')
     roi0     = varargin{2};   
     frames = Centroid.frames;    
     numroipts = length(roi0.xG);
+    if nargin > 6
+        imVis = varargin{3};
+    else
+        imVis = 1;
+    end
     
 elseif strcmp(opType,'Centroid & Rotation')
        
     S = varargin{1}; 
     frames = S.frames;    
     numroipts = length(S.roi(1).xPerimL);    
-    
+    if nargin > 5
+        imVis = varargin{2};
+    else
+        imVis = 1;
+    end
 end
 
 
-%% Loop thru frames
+%% Initialize things
 
 % Make figure
 f = figure;
+
+if ~imVis
+    set(f,'Visible','off')
+end
 
 if nargout>0
     % Initialize index
     idx = 1;
 end
 
-% Loop thru data
-for i = 1:length(frames)
+
+%% loop thru frames (not 'blobs G&L')
+
+if ~strcmp(opType,'blobs G&L')
     
-    % Current whole frame
-    im = getFrame(vid_path,v,frames(i),imInvert,'gray');
-    
-    if strcmp(opType,'Centroid & Rotation')
-        subplot(1,2,1)
-    end
-    
-    % Display frame
-    h = imshow(im,'InitialMag','fit');
-    hold on
-    
-    if strcmp(opType,'blobs G&L')
+    % Loop thru data
+    for i = 1:length(frames)
         
-        if ~isnan(B(i).propsL)
+        % Current whole frame
+        im = getFrame(vid_path,v,frames(i),imInvert,'gray');
+        
+        if strcmp(opType,'blobs L simple')
+            % Roi image, mean image subtracted
+            im = giveROI('stabilized',im,S.roi(i),dSample, ...
+                S.tform(:,:,i),imRoiMean);
+        end
+        
+        if strcmp(opType,'Centroid & Rotation')
+            subplot(1,2,1)
+        end
+        
+        % Display frame
+        h = imshow(im,'InitialMag','fit');
+        hold on
+        
+        if strcmp(opType,'blobs G&L')
             
+            if 1%~isnan(B(i).propsL)
+                
+                % Start with blank
+                bwG  = logical(zeros(size(im)));
+                
+                % Score pixels with blobs
+                for k = 1:length(B(i).propsG),
+                    bwG(B(i).propsG(k).PixelIdxList) = 1;
+                end
+                
+                % Make a truecolor all-green image, make non-blobs invisible
+                green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
+                h = imshow(green,'InitialMag','fit');
+                set(h, 'AlphaData', bwG.*alphaLevel)
+            end
+            
+        elseif strcmp(opType,'blobs L simple')
+            
+            % Overlay blobs
+            [props,bw,areas,xB,yB] = findBlobs(im,tVal,'area',areaMin,areaMax);
+            
+            % Make a truecolor all-green image, make non-blobs invisible
+            green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
+            h = imshow(green,'InitialMag','fit');
+            set(h, 'AlphaData', bw)
+            
+            clear props bw areas xB yB
+            
+            
+        elseif strcmp(opType,'Centroid tracking') || strcmp(opType,'Centroid & Rotation')
+            
+            % roi in global frame
+            xG = S.roi(i).xPerimG;
+            yG = S.roi(i).yPerimG;
+            xC = S.roi(i).xCntr;
+            yC = S.roi(i).yCntr;
+            
+            % Plot tracking
+            h(1) = line(xG,yG,'Color',[0 1 0 0.2],'LineWidth',3);
+            h(2) = plot(xC,yC,'g+');
+            
+        end
+        
+        if strcmp(opType,'Centroid & Rotation')
+            dSample = 0;
+            
+            [im_roi,bw_mask] = giveROI('stabilized',im,S.roi(i),dSample,S.tform(:,:,i));
+            
+            subplot(1,2,2)
+            
+            h = imshow(im_roi,'InitialMag','fit');
+            
+        end
+        
+        
+        title(['Frame ' num2str(frames(i))]);
+        
+        if nargout>0
+            % Capture frame
+            M(idx) = getframe(gcf);
+            
+            % Advance index
+            idx = idx + 1;
+        end
+        
+        if imVis
+            pause(0.001);
+        else
+            disp(['aniData (' opType ') : ' num2str(i) ' of ' num2str(length(frames))])
+        end
+        
+        hold off
+    end
+end
+
+%% loop thru frames ('blobs G&L')
+
+if strcmp(opType,'blobs G&L')
+    
+    % Loop thru data
+    for i = 1:length(B)
+        
+        if isfield(B(i).propsG,'Area')
+            % Current whole frame
+            im = getFrame(vid_path,v,B(i).fr_num,imInvert,'gray');
+            
+            % Display frame
+            h = imshow(im,'InitialMag','fit');
+            hold on
+
             % Start with blank
-            bwB  = logical(zeros(size(im)));
+            bwG  = logical(zeros(size(im)));
             
             % Score pixels with blobs
             for k = 1:length(B(i).propsG),
@@ -79,49 +219,31 @@ for i = 1:length(frames)
             % Make a truecolor all-green image, make non-blobs invisible
             green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
             h = imshow(green,'InitialMag','fit');
-            set(h, 'AlphaData', bw_blobs_G)
+            set(h, 'AlphaData', bwG.*alphaLevel)
+            
+            title(['Frame ' num2str(frames(i))]);
+            
+            if nargout>0
+                % Capture frame
+                M(idx) = getframe(gcf);
+                
+                % Advance index
+                idx = idx + 1;
+            end
+            
+            if imVis
+                pause(0.001);
+            else
+                disp(['aniData (' opType ') : ' num2str(i) ' of ' num2str(length(frames))])
+            end
+            
+            hold off
         end
-        
-    elseif strcmp(opType,'Centroid tracking') || strcmp(opType,'Centroid & Rotation')  
-        
-        % roi in global frame
-        xG = S.roi(i).xPerimG;
-        yG = S.roi(i).yPerimG;
-        xC = S.roi(i).xCntr;
-        yC = S.roi(i).yCntr;
-        
-        % Plot tracking
-        h(1) = line(xG,yG,'Color',[0 1 0 0.2],'LineWidth',3);
-        h(2) = plot(xC,yC,'g+');
- 
     end
-    
-    if strcmp(opType,'Centroid & Rotation')
-        dSample = 0;
-        
-        [bw_mask,im_roi] = giveROI('stabilized',im,S.roi(i),dSample,S.tform(:,:,i));
-        
-        subplot(1,2,2)
-        
-        h = imshow(im_roi,'InitialMag','fit');
-        
-    end
-    
-    
-    title(['Frame ' num2str(frames(i))]);
-    
-    if nargout>0
-        % Capture frame
-        M(idx) = getframe(gcf);
-        
-        % Advance index
-        idx = idx + 1;
-    end
-    
-    pause(0.001);
-    
-    hold off
 end
+
+
+%% Finish up
 
 close(f)
 
@@ -129,34 +251,34 @@ close(f)
 varargout{1} = M;
 
 
-function visTrack(im,x,y,r,theta,tform,t_txt)
-
-% Do not downsample the roi image:
-dSample = 0;
-
-% If rotation included . . 
-if nargin>5 && ~isempty(tform)
-    % Focus on roi
-    [bw_mask,im_roi,roi_rect,bw_roi,imStable] = giveROI('circular',im,x,y,r,theta,...
-        dSample,tform);
-  
-    subplot(1,2,2)
-    imshow(imStable,'InitialMagnification','fit');
-    
-    % Set up for main plot
-    subplot(1,2,1)
-end
-
-% Circular coordinates for new roi
-xC    = r.*cos(theta) + x;
-yC    = r.*sin(theta) + y;
-
-imshow(im,'InitialMagnification','fit');
-hold on
-h = line(xC,yC,'Color',[1 0 0 0.2],'LineWidth',3);
-title(t_txt)
-plot(x,y,'r+')
-hold off
-
+% function visTrack(im,x,y,r,theta,tform,t_txt)
+% 
+% % Do not downsample the roi image:
+% dSample = 0;
+% 
+% % If rotation included . . 
+% if nargin>5 && ~isempty(tform)
+%     % Focus on roi
+%     [im_roi,bw_mask,roi_rect,bw_roi,imStable] = giveROI('circular',im,x,y,r,theta,...
+%         dSample,tform);
+%   
+%     subplot(1,2,2)
+%     imshow(imStable,'InitialMagnification','fit');
+%     
+%     % Set up for main plot
+%     subplot(1,2,1)
+% end
+% 
+% % Circular coordinates for new roi
+% xC    = r.*cos(theta) + x;
+% yC    = r.*sin(theta) + y;
+% 
+% imshow(im,'InitialMagnification','fit');
+% hold on
+% h = line(xC,yC,'Color',[1 0 0 0.2],'LineWidth',3);
+% title(t_txt)
+% plot(x,y,'r+')
+% hold off
+% 
 
 

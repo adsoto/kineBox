@@ -17,6 +17,11 @@ if strcmp(bMode,'area')
     areaMin = varargin{1};
     areaMax = varargin{2};
     
+elseif strcmp(bMode,'area and circ')
+    areaMin = varargin{1};
+    areaMax = varargin{2};
+    AR_max  = varargin{3};
+    
 elseif strcmp(bMode,'coord')
     x = varargin{1};
     y = varargin{2};
@@ -43,7 +48,7 @@ bwOut = bw.*0~=0;
 % Initialize index
 j = 1;
 
-if strcmp(bMode,'area')
+if strcmp(bMode,'area') || strcmp(bMode,'area and circ')
     
     % Survey blobs
     props = regionprops(bw,'Centroid','Area',...
@@ -56,19 +61,32 @@ if strcmp(bMode,'area')
     for i = 1:length(props)
   
         % If blob is in the area bounds . . .
-        if (props(i).Area >= areaMin) && ...
-                (props(i).Area <= areaMax)
+        if (props(i).Area >= areaMin) && (props(i).Area <= areaMax)
             
-            % Add to area
-            areas(j,1) = props(i).Area;
+            if strcmp(bMode,'area')
+                % Add to area
+                areas(j,1) = props(i).Area;
+                
+                % Add to props out
+                propOut(j,1) = props(i);
+                
+                % Add white pixels for current blob
+                bwOut(props(i).PixelIdxList) = 1;
+                
+                j = j + 1;
             
-            % Add to props out
-            propOut(j,1) = props(i);
+            elseif strcmp(bMode,'area and circ') && ...
+                    props(i).MajorAxisLength/props(i).MinorAxisLength < AR_max
+                
+                % Add to props out
+                propOut(j,1) = props(i);
+                
+                % Add white pixels for current blob
+                bwOut(props(i).PixelIdxList) = 1;
+                
+                j = j + 1;
+            end
             
-            % Add white pixels for current blob
-            bwOut(props(i).PixelIdxList) = 1;
-            
-            j = j + 1;
             %x = 1;
             %plot(props(i).PixelList(:,1),props(i).PixelList(:,2),'g.')
         end        

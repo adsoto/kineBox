@@ -12,6 +12,9 @@ if nargin < 2
     ext = 'jpg';
 end
 
+
+
+
 % If directory of images . . .
 if isdir(vid_path)
      
@@ -58,6 +61,10 @@ if isdir(vid_path)
     
 % If single file . . .
 else
+    
+    % Extract file parts
+    %[pathstr,name,ext] = fileparts(vid_path);
+    
     % Find video info
     v = VideoReader(vid_path);
     

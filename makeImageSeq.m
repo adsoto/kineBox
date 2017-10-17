@@ -1,13 +1,26 @@
-function makeImageSeq(filename,pathname)
+function makeImageSeq(filename,pathname,varargin)
 % Creates a grayscale image sequence from a video file
 %   filename - name of video file
 %   pathname - path to video file
+
+% makeImageSeq(filename,pathname) 
+% writes image sequnence to pathname
+
+% makeImageSeq(filename,pathname,newpath) 
+% writes image sequnence to newpath
+
 %
 % Developed by McHenryLab at UC Irvine
 
 % Prompt to browse to filename
 if nargin < 1
     [filename,pathname] = uigetfile({'*.MP4';'*.mp4'});
+end
+
+if nargin>2
+    newpath = varargin{1};
+else
+    newpath = pathname;
 end
 
 % Get file info
@@ -42,7 +55,7 @@ for i = 1:floor(v.FrameRate * v.Duration)
     newname = ['frame_' frnum '.jpg'];
     
     % Write image
-    imwrite(imGray,cmap,[pathname filesep name filesep newname],'jpg','BitDepth',8);
+    imwrite(imGray,cmap,[newpath filesep name filesep newname],'jpg','BitDepth',8);
     
     % Update status
     disp(['  Written ' num2str(i) ' of ' ...
