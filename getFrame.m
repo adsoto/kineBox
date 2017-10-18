@@ -10,13 +10,9 @@ function im = getFrame(vid_path,v,fr_num,imInvert,clrMode,imMean)
 %
 % Developed by McHenryLab at UC Irvine
 
+%% Parse inputs
 
-%% Read frame in an image sequence
-
-% If it is an image sequence . . .
-if isfield(v.UserData,'FileInfo');
-    
-    % Default for image invert
+% Default for image invert
     if nargin < 4
         imInvert = 0;
     end
@@ -30,65 +26,51 @@ if isfield(v.UserData,'FileInfo');
         imMean = [];
     end
     
-    % If no frame number given . . .
-    if nargin < 3 || isempty(fr_num)
-        warning('No frame number given, defaulting to first frame')
-        fr_num = 1;
-        
-    % Otherwise . . .
-    else
-        % Check requested frame number
-        if fr_num>v.UserData.LastFrame
-            error(['Video sequence does not have a frame ' num2str(fr_num)]);
-        end
-        
-        % Frame index
-        iFrame = fr_num-v.UserData.FirstFrame + 1;
-        %iFrame = fr_num;
-        
-        % Get filename and extension
-        fName = v.UserData.FileInfo(iFrame).name;
-        ext   = fName(find(fName=='.')+1:end);
-        fName = fName(1:(find(fName=='.')-1));
-       
-        % Get frame number
-        frNum = str2num(fName((find(fName=='_')+1):end));
-        
-        % Check for match
-        if frNum~=fr_num
-            error('file numbering does not match the video info');
-        end
-    end
-    
+%     % If no frame number given . . .
+%     if nargin < 3 || isempty(fr_num)
+%         warning('No frame number given, defaulting to first frame')
+%         fr_num = 1;
+%         
+%     % Otherwise . . .
+%     else
+%         % Check requested frame number
+%         if fr_num>v.UserData.LastFrame
+%             error(['Video sequence does not have a frame ' num2str(fr_num)]);
+%         end
+%         
+%         % Frame index
+%         iFrame = fr_num-v.UserData.FirstFrame + 1;
+%         %iFrame = fr_num;
+%         
+%         % Get filename and extension
+%         fName = v.UserData.FileInfo(iFrame).name;
+%         ext   = fName(find(fName=='.')+1:end);
+%         fName = fName(1:(find(fName=='.')-1));
+%        
+%         % Get frame number
+%         frNum = str2num(fName((find(fName=='_')+1):end));
+%         
+%         % Check for match
+%         if frNum~=fr_num
+%             error('file numbering does not match the video info');
+%         end
+%     end
+
+
+%% Read frame
+
+% If it is an image sequence . . .
+if isfield(v.UserData,'FileInfo');
+
     % Read image
     im = imread([vid_path filesep v.UserData.FileInfo(iFrame).name]);    
-    
-    % Convert to grayscale
-    if strcmp(clrMode,'gray')
-        im = rgb2gray(im);
-    end
-    
-    % Invert, if requested
-    if imInvert==1
-        im = imcomplement(im);
-    end
-    
-    % Subtract mean image, if present
-    if ~isempty(imMean)
-        %im = imsubtract(im,imMean);
+        
 
-        im = imadjust(imcomplement(imsubtract(imMean,im)));
-    
-    end
-end    
-    
-
-%% Read frame from a movie file
-
-if ~isfield(v.UserData,'FileInfo')
-    
-    % Adjust items in 'v'
-    v.Path       = vid_path; 
+% Read frame from a movie file . . .
+else
+  
+    % Adjust items to new 'v'
+    v = VideoReader(vid_path);
     v.CurrentTime = fr_num./v.FrameRate;
     
      % Read next available frame
@@ -96,4 +78,22 @@ if ~isfield(v.UserData,'FileInfo')
     
 end
 
+%% Modify image
+
+% Convert to grayscale
+if strcmp(clrMode,'gray')
+    im = rgb2gray(im);
+end
+
+% Invert, if requested
+if imInvert==1
+    im = imcomplement(im);
+end
+
+% Subtract mean image, if present
+if ~isempty(imMean)
+    %im = imsubtract(im,imMean);
+    
+    im = imadjust(imcomplement(imsubtract(imMean,im)));
+    
 end
