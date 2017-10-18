@@ -64,7 +64,11 @@ elseif strcmp(coordType,'roi')
     % 
     Centroid = varargin{2};
     
-    Rotation = varargin{3};
+    if nargin > 3
+        Rotation = varargin{3};
+    else
+        Rotation = [];
+    end
     
 else
     error('coordType not recognized');
@@ -120,7 +124,7 @@ end
 
 if strcmp(coordType,'roi')
     
-    if length(Rotation)~=length(Centroid.x)
+    if ~isempty(Rotation) && length(Rotation)~=length(Centroid.x)
         error('mismatch in length of data sources');
     end
     
@@ -135,9 +139,13 @@ if strcmp(coordType,'roi')
 %     S.roi.theta     = roi0.theta;
     
     % Loop thru frames, store varying parameters
-    for i = 1:length(Rotation)
+    for i = 1:length(Centroid.x)
         
-        S.tform(:,:,i) = Rotation(i).tform_roi;
+        if ~isempty(Rotation)
+            S.tform(:,:,i) = Rotation(i).tform_roi;
+        else
+            S.tform = [];
+        end
         
         % Number of roi points
         numroipts = length(roi0.xPerimG);

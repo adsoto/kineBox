@@ -54,12 +54,13 @@ elseif strcmp(opType,'blobs L simple')
     
 elseif strcmp(opType,'Centroid tracking')
        
-    Centroid = varargin{1};
-    roi0     = varargin{2};   
-    frames = Centroid.frames;    
-    numroipts = length(roi0.xG);
-    if nargin > 6
-        imVis = varargin{3};
+    S       = varargin{1};
+   
+    frames = S.frames;    
+    numroipts = length(S.roi(1).theta);
+    
+    if nargin > 5
+        imVis = varargin{2};
     else
         imVis = 1;
     end
@@ -145,7 +146,7 @@ if ~strcmp(opType,'blobs G&L')
             set(h, 'AlphaData', bw)
             
             clear props bw areas xB yB
-            
+         
             
         elseif strcmp(opType,'Centroid tracking') || strcmp(opType,'Centroid & Rotation')
             
