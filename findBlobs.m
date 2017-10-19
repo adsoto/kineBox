@@ -16,6 +16,15 @@ function varargout = findBlobs(im,tVal,bMode,varargin)
 if strcmp(bMode,'area')
     areaMin = varargin{1};
     areaMax = varargin{2};
+
+elseif strcmp(bMode,'coord advanced')
+    x        = varargin{1};
+    y        = varargin{2};
+    if nargin<5
+        areaLast = varargin{3};
+    else
+        areaLast = [];
+    end
     
 elseif strcmp(bMode,'area and circ')
     areaMin = varargin{1};
@@ -108,6 +117,61 @@ elseif strcmp(bMode,'coord')
     
     if length(propOut)~=1
         error('Need to select one (and only one) blob')
+    end
+    
+    % Add to area
+    areas = propOut.Area;
+            
+    % Add white pixels for current blob
+    bwOut(propOut.PixelIdxList) = 1;
+    
+    
+elseif strcmp(bMode,'coord advanced')
+    
+    % Dialate the binary image a bit
+    se = strel('disk',3,4);    
+    bw = imdilate(bw,se);
+    
+    % Try to get blob on coordinate ------------
+    bwS = bwselect(bw,x,y);
+    
+    % Survey blobs
+    propOut = regionprops(bwS,'Centroid','Area',...
+        'MajorAxisLength','MinorAxisLength',...
+        'PixelIdxList','PixelList');
+    
+    % If that fails, get blob closest to last
+    if isempty(propOut)
+        
+        % Survey blobs
+        props = regionprops(bw,'Centroid','Area',...
+            'MajorAxisLength','MinorAxisLength',...
+            'PixelIdxList','PixelList');
+        
+        minDist = [inf nan];
+        
+        if isempty(props)
+            error('Lost blob -- maybe try different treshold or roi radius')
+            
+        elseif length(props)>1
+            for j = 1:length(props)  
+                
+                % Distance of current blob from last
+                currDist = hypot(x-props(i).Centroid(1),y-props(i).Centroid(2));
+                
+                if ~isempty(areaLast) && ...
+                   (props(i).Area > areaLast*.5) && ...
+                   (currDist < minDist)     
+                    minDist = currDist;
+                    propOut = props(i);
+                end
+            end
+  
+        end
+    end   
+    
+    if isempty(propOut)
+        error('Lost blob -- maybe try different treshold or roi radius')
     end
     
     % Add to area

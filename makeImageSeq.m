@@ -55,7 +55,8 @@ for i = 1:floor(v.FrameRate * v.Duration)
     newname = ['frame_' frnum '.jpg'];
     
     % Write image
-    imwrite(imGray,cmap,[newpath filesep name filesep newname],'jpg','BitDepth',8);
+    %imwrite(imGray,cmap,[newpath filesep name filesep newname],'jpg','BitDepth',8);
+    imwrite(imGray,[newpath filesep name filesep newname],'jpg','BitDepth',8);
     
     % Update status
     disp(['  Written ' num2str(i) ' of ' ...

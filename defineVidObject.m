@@ -27,21 +27,15 @@ if isdir(vid_path)
               vid_path]);
     end
     
-    % If there is a video info dir . . .
-    if ~isempty(dir([vid_path filesep 'vid_info.mat']))
-        % Load video info (v)
-        load([vid_path filesep 'vid_info'])
-        
-    % If no video info (e..g created by other software)
-    else
-        % Read one image for dimensions
-        im = imread([vid_path filesep a(1).name]);
-        
-        % Fill in basics for video info
-        v.Path   = vid_path;
-        v.Width  = size(im,2);
-        v.Height = size(im,1); 
-    end    
+
+    % Read one image for dimensions
+    im = imread([vid_path filesep a(1).name]);
+    
+    % Fill in basics for video info
+    v.Path   = vid_path;
+    v.Width  = size(im,2);
+    v.Height = size(im,1);
+    
     
     % Loop thru files
     for i = 1:length(a)

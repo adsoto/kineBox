@@ -3,8 +3,10 @@ function varargout = imInteract(im,action,varargin)
 %   im       - image 
 %   action   - strong requesting type of iteraction 
 %
-% tVal = imInteract(im,'threshold')
+% tVal = imInteract(im,'threshold',bLevel)
 %    returns the chosen threshold
+%    bLevel - brighteness/darkness level (negative values from -1 to 0
+%    darken)
 %
 % [x,y] = imInteract(im,'points',n)
 %    returns coordinates for n number of points (default:n=inf)
@@ -31,6 +33,12 @@ if strcmp(action,'points')
         n = inf;
     end
     
+    if nargin > 3
+        bLevel = varargin{2};
+    else
+        bLevel = 0;
+    end
+    
 elseif strcmp(action,'radius')
     
     if nargin > 2
@@ -41,6 +49,37 @@ elseif strcmp(action,'radius')
         rY = [];
     end
     
+    if nargin > 4
+        bLevel = varargin{3};
+    else
+        bLevel = 0;
+    end
+    
+elseif strcmp(action,'ellipse')
+    
+    % Max num of pts
+    n = 4;
+    
+    % Points in each quadrant of ellipse
+    numpts = 100;
+    
+    rX = [];
+    rY = [];
+    
+    if nargin > 2
+        bLevel = varargin{1};
+    else
+        bLevel = 0;
+    end
+    
+elseif strcmp(action,'threshold')
+    
+    if nargin > 2
+        bLevel = varargin{1};
+    else
+        bLevel = 0;
+    end
+
 end
 
 
@@ -80,6 +119,24 @@ elseif strcmp(action,'radius')
     B{i}.key = 31;
     B{i}.dostr = 'r = max([2 (r - rInc)]);';
     B{i}.info = 'Down arrow: decrease radius';    
+    
+% Ellipse mode
+elseif strcmp(action,'ellipse')
+    
+    disp('Select in clockwise order, starting at the top')
+    
+    % Left click
+    i = i + 1;
+    B{i}.key = 1;
+    B{i}.dostr = 'idx=min([n length(xPos)+1]);xPos(idx,1)=x; yPos(idx,1)=y;';
+    B{i}.info = 'Left click: select point';  
+
+    % Right click
+    i = i + 1;
+    B{i}.key = 3;
+    B{i}.dostr = ['if length(xPos)==1;xPos=[];yPos=[]; '...
+                  'else; xPos = xPos(1:end-1);yPos = yPos(1:end-1);end'];
+    B{i}.info = 'Right click: delete last point';        
 
 % Threshold mode
 elseif strcmp(action,'threshold')
@@ -168,6 +225,7 @@ giveInfo(B)
 
 % Plot image
 imshow(im,'InitialMagnification','fit');
+brighten(bLevel)
 hold on
 
 % Parameter defaults
@@ -183,7 +241,7 @@ yPos = [];
 r = round(min(size(im))/4);
 rInc = round(min(size(im))/50);
 
-if strcmp(action,'radius')
+if strcmp(action,'radius') || strcmp(action,'ellipse')
     
     % Radial positions
     theta = linspace(0,2*pi,200);
@@ -240,6 +298,7 @@ while true
         % Make a truecolor all-green image, make non-blobs invisible
         green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
         h = imshow(green,'InitialMag','fit');
+        %brighten(bLevel)
         set(h, 'AlphaData', bw)
 
     % Show points, if needed
@@ -257,6 +316,90 @@ while true
         % Plot
         %h = plot(xCirc,yCirc,'g-');
         h = line(xCirc,yCirc,'Color',[0 1 0 0.2],'LineWidth',3);
+        
+    % Ellipse mode
+    elseif strcmp(action,'ellipse')
+        
+        % Radial positions
+        theta1 = linspace(-pi/2,0,numpts)';
+        theta2 = linspace(0,pi/2,numpts)';
+        theta3 = linspace(pi/2,pi,numpts)';
+        theta4 = linspace(pi,1.5*pi,numpts)';
+        
+        if length(xPos)<2
+            h = plot(xPos,yPos,'g+');
+            
+        else
+            radY1 = abs(diff(yPos(1:2)));
+            radX1 = abs(diff(xPos(1:2)));
+            
+            % Define circle
+            xCirc = radX1.*cos(theta1)+xPos(1);
+            yCirc = radY1.*sin(theta1)+yPos(2);
+            
+            if length(xPos)>2
+                
+                radY2 = abs(diff(yPos(2:3)));
+                radX2 = abs(diff(xPos(2:3)));
+                
+                % Define circle
+                xCirc = [xCirc; radX2.*cos(theta2)+xPos(3)];
+                yCirc = [yCirc; radY2.*sin(theta2)+yPos(2)];
+                
+                if length(xPos)>3
+                    
+                    radY3 = abs(diff(yPos(3:4)));
+                    radX3 = abs(diff(xPos(3:4)));
+                    
+                    % Define circle
+                    xCirc = [xCirc; radX3.*cos(theta3)+xPos(3)];
+                    yCirc = [yCirc; radY3.*sin(theta3)+yPos(4)];
+                    
+                    radY4 = abs(yPos(4)-yPos(1));
+                    radX4 = abs(xPos(4)-xPos(1));
+                    
+                    % Define circle
+                    xCirc = [xCirc; radX4.*cos(theta4)+xPos(1)];
+                    yCirc = [yCirc; radY4.*sin(theta4)+yPos(4)];
+                end
+            end
+                
+            h = plot(xCirc,yCirc,'g-');
+            
+        end
+            
+%         elseif length(xPos)==3
+%             
+%             % Radial positions
+%             theta = linspace(-pi/2,pi/2,200);
+%             
+%             radY =  range(yPos)/2;
+%             radX =  range(xPos);
+%             
+%             % Define circle
+%             xCirc = radX.*cos(theta) + mean([xPos(1) xPos(3)]);
+%             yCirc = radY.*sin(theta) + mean(yPos);
+%             
+%             % Define circle
+%             xCirc = r.*cos(theta)+xPos(1);
+%             yCirc = r.*sin(theta)+mean(yPos);
+%             
+%             h = plot(xCirc,yCirc,'g-');
+%             
+%         elseif length(xPos)>3
+%             
+%             % Radial positions
+%             theta = linspace(0,2*pi,200);
+%             
+%             radY =  range(yPos);
+%             radX =  range(xPos);
+%             
+%             % Define circle
+%             xCirc = radX.*cos(theta) + mean(xPos(1));
+%             yCirc = radY.*sin(theta) + mean(yPos);
+%             
+%             h = plot(xCirc,yCirc,'g-');    
+%         end
         
     end
 
@@ -352,6 +495,9 @@ elseif strcmp(action,'points')
 elseif strcmp(action,'radius')
     varargout{1} = r;
     
+elseif strcmp(action,'ellipse')
+    varargout{1} = xCirc;
+    varargout{2} = yCirc;
 end
 
 

@@ -65,6 +65,20 @@ elseif strcmp(opType,'Centroid tracking')
         imVis = 1;
     end
     
+    
+elseif strcmp(opType,'Pred-prey cent track')
+    
+    % Parse inputs
+    C_pd   = varargin{1};
+    C_py   = varargin{2};
+    r_pd   = varargin{3};
+    r_py   = varargin{4};
+    imVis  = varargin{5};
+
+    numroipts = 400;
+    frames = C_pd.frames;
+    
+    
 elseif strcmp(opType,'Centroid & Rotation')
        
     S = varargin{1}; 
@@ -159,6 +173,20 @@ if ~strcmp(opType,'blobs G&L')
             % Plot tracking
             h(1) = line(xG,yG,'Color',[0 1 0 0.2],'LineWidth',3);
             h(2) = plot(xC,yC,'g+');
+            
+        elseif strcmp(opType,'Pred-prey cent track')
+            
+            % Current rois
+            roiPd = giveROI('define','circular',numroipts,r_pd,...
+                     C_pd.x(i),C_pd.y(i));
+            roiPy = giveROI('define','circular',numroipts,r_py,...
+                     C_py.x(i),C_py.y(i));
+                 
+            % Plot
+            h(1) = line(roiPd.xPerimG,roiPd.yPerimG,'Color',[1 0 0 0.2],'LineWidth',3);
+            h(2) = line(roiPy.xPerimG,roiPy.yPerimG,'Color',[0 0 1 0.2],'LineWidth',3);
+            h(3) = plot(C_pd.x(i),C_pd.y(i),'r+');
+            h(4) = plot(C_py.x(i),C_py.y(i),'b+');   
             
         end
         
