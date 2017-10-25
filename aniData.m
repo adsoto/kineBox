@@ -12,6 +12,10 @@ function varargout = aniData(vid_path,v,imInvert,opType,varargin)
 %   B - Blob data structure (created by anaBlobs)
 %   imVis - logical indicating whether to display frames as they are put
 %   together.
+%
+% M = anaBlobs(vid_path,v,'Centroid & Rotation',S,imVis)
+%    S - structure that defines coordinate transformation bwtn roi and
+%    frame for whole movie (created by defineSystem2d)
 
 %% Parameters
 
@@ -193,8 +197,13 @@ if ~strcmp(opType,'blobs G&L')
         if strcmp(opType,'Centroid & Rotation')
             dSample = 0;
             
-            [im_roi,bw_mask] = giveROI('stabilized',im,S.roi(i),dSample,S.tform(:,:,i));
-            
+            if isfield(S,'ang')
+                [im_roi,bw_mask] = giveROI('stabilized',im,S.roi(i),...
+                    dSample,S.ang(i));
+            else
+                [im_roi,bw_mask] = giveROI('stabilized',im,S.roi(i),...
+                    dSample,S.tform(:,:,i));
+            end
             subplot(1,2,2)
             
             h = imshow(im_roi,'InitialMag','fit');

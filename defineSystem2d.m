@@ -13,10 +13,11 @@ function varargout = defineSystem2d(coordType,varargin)
 %    origin  - a vector of 2 coordinates that define origin L in G
 %    axCoord - a vector of 2 coordinates defining y-axis for L in G
 %
-% S = defineSystem2d('full roi',rect,tform)
+% S = defineSystem2d('roi',roi0,Centroid,Rotation)
 % Defines a region-of-interest within an image
-%    rect - vector defining the roi in G frame
-%    tform - transformation matrix for rotation within the roi
+%    roi0 - structure defining region-of-interest for initial frame
+%    Centroid - strcuture with centroid data
+%    Rotation - (optional) strcuture for rotation data
 %
 % Code developed by McHenryLab at UC Irvine
 
@@ -124,27 +125,54 @@ end
 
 if strcmp(coordType,'roi')
     
-    if ~isempty(Rotation) && length(Rotation)~=length(Centroid.x)
-        error('mismatch in length of data sources');
-    end
-    
-    % Store general parameters
+    % Store centroid data
     S.frames        = Centroid.frames;
     S.xCntr         = Centroid.x;
     S.yCntr         = Centroid.y;
-%    S.roi.r         = roi0.r;
-%     S.roi_shape     = roi0.shape;
-%     S.roi.xPerimL   = roi0.xPerimL;
-%     S.roi.yPerimL   = roi0.yPerimL;
-%     S.roi.theta     = roi0.theta;
+    
+    % For the 'advanced rotation' method by tracker . . .
+    if length(Rotation)==1 && isfield(Rotation,'tform_roi')
+        
+        S.tform       = Rotation.tform_roi;
+        S.ref_frame   = Rotation.ref_frame;
+        %S.rot_deg     = Rotation_net;
+        
+    elseif length(Rotation)~=length(Centroid.x)
+        error('mismatch in length of data sources');
+        
+    end
+    
+    % Set reference as first frame
+    S.ref_frame    = zeros(length(Centroid.x),1);
+    S.ref_frame(1) = 1;
+    
+    % Reference rotation
+    ref_rot = 0;
     
     % Loop thru frames, store varying parameters
     for i = 1:length(Centroid.x)
         
-        if ~isempty(Rotation)
+        if ~isfield(S,'tform') && ~isempty(Rotation) && length(Rotation)~=1
             S.tform(:,:,i) = Rotation(i).tform_roi;
-        else
+            
+        elseif ~isfield(S,'tform')
             S.tform = [];
+        end
+        
+        % Get angular rotation since last reference frame
+        tformInv  = invert(S.tform(:,:,i));
+        rot_ang   = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
+            
+        %TODO: calculate total rotation
+        
+        % If this is a reference frame, update reference angle
+        if Rotation.ref_frame(i)
+            
+            % Add current angle to prior reference
+            ref_rot = ref_rot + rot_ang;
+            
+            % Zero rotation angle for storage
+            rot_ang = 0;
         end
         
         % Number of roi points
@@ -156,16 +184,12 @@ if strcmp(coordType,'roi')
         
         % Current roi
         S.roi(i) = giveROI('define','circular',numroipts,roi0.r,xC,yC);
-%         
-%         % Store roi data
-%         
-%         S.roi(i).xCntr    = Centroid.x(i);
-%         S.roi(i).yCntr    = Centroid.y(i);
-%         S.roi(i).xPerimG  = tmp.xPerimG;
-%         S.roi(i).yPerimG  = tmp.yPerimG;
-%         S.roi(i).         = tmp.rect;       
+        
+        % Store net angle
+        S.ang(i,1) = ref_rot + rot_ang;
     end
 end
+
 
 
 %% Package system for output

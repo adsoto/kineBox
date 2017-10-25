@@ -160,21 +160,37 @@ if ~strcmp(action,'define')
     
     if strcmp(action,'stabilized')
         
-        if isempty(tform.T)
+        if length(tform)>1 && isfield(tform,'T') && isempty(tform.T)
             error('You need to provide tform if you want imStable');
         end
         
-        % Coordinate system for im_roi
-        R = imref2d(size(im_roi));
+        % Rotation angle passed as tform . . .
+        if length(tform)==1
+            rot_ang = tform;
+            
+        % If tform exists, calculate angle . . .
+        else           
+            % Get angular rotation from tform
+            tformInv = invert(tform);
+            rot_ang  = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
+        end
         
-        % Adjust WorldLimits to restrict transformation to just rotation
-        % around center
-        R.XWorldLimits = R.XWorldLimits-mean(R.XWorldLimits);
-        R.YWorldLimits = R.YWorldLimits-mean(R.YWorldLimits);
+        imStable = imrotate(im_roi,-rot_ang,'bilinear','crop');
         
-        % Stablize image
-        imStable = imwarp(im_roi,R,tform,'OutputView',R,...
-            'FillValues',255,'SmoothEdges',true);
+%         % Coordinate system for im_roi
+%         R = imref2d(size(im_roi));
+%         
+%         % Adjust WorldLimits to restrict transformation to just rotation
+%         % around center
+%         R.XWorldLimits = R.XWorldLimits-mean(R.XWorldLimits);
+%         R.YWorldLimits = R.YWorldLimits-mean(R.YWorldLimits);
+% %         R.XIntrinsicLimits = R.XWorldLimits;
+% %         R.YIntrinsicLimits = R.YWorldLimits;
+%         
+%         
+%         % Stablize image
+%         imStable = imwarp(im_roi,R,tform,'OutputView',R,...
+%             'FillValues',255,'SmoothEdges',true);
         
         % White out beyond roi
         imStable(~bw_roi_mask) = 255;

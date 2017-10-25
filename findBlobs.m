@@ -148,25 +148,42 @@ elseif strcmp(bMode,'coord advanced')
             'MajorAxisLength','MinorAxisLength',...
             'PixelIdxList','PixelList');
         
-        minDist = [inf nan];
+        minDist = inf;
         
         if isempty(props)
             error('Lost blob -- maybe try different treshold or roi radius')
             
         elseif length(props)>1
-            for j = 1:length(props)  
+            for i = 1:length(props)  
                 
                 % Distance of current blob from last
                 currDist = hypot(x-props(i).Centroid(1),y-props(i).Centroid(2));
                 
                 if ~isempty(areaLast) && ...
-                   (props(i).Area > areaLast*.5) && ...
-                   (currDist < minDist)     
+                   (props(i).Area > areaLast/2) && ...
+                   (currDist < minDist)  && ...
+                    (props(i).Area < areaLast*2)
+               
                     minDist = currDist;
                     propOut = props(i);
                 end
             end
-  
+            
+            % If lost blob, try again without area filter
+            if isempty(propOut)
+                for i = 1:length(props)
+                    
+                    % Distance of current blob from last
+                    currDist = hypot(x-props(i).Centroid(1),y-props(i).Centroid(2));
+                    
+                    if currDist < minDist                          
+                        minDist = currDist;
+                        propOut = props(i);
+                    end
+                end
+                
+                
+            end
         end
     end   
     
