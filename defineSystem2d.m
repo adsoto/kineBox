@@ -136,8 +136,8 @@ if strcmp(coordType,'roi')
         S.tform       = Rotation.tform_roi;
         S.ref_frame   = Rotation.ref_frame;
         %S.rot_deg     = Rotation_net;
-        
-    elseif length(Rotation)~=length(Centroid.x)
+             
+    elseif ~isempty(Rotation) && length(Rotation)~=length(Centroid.x)
         error('mismatch in length of data sources');
         
     end
@@ -159,20 +159,23 @@ if strcmp(coordType,'roi')
             S.tform = [];
         end
         
-        % Get angular rotation since last reference frame
-        tformInv  = invert(S.tform(:,:,i));
-        rot_ang   = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
+        if ~isempty(S.tform)
+            % Get angular rotation since last reference frame
+            tformInv  = invert(S.tform(:,:,i));
+            rot_ang   = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
             
-        %TODO: calculate total rotation
-        
-        % If this is a reference frame, update reference angle
-        if Rotation.ref_frame(i)
+            % If this is a reference frame, update reference angle
+            if Rotation.ref_frame(i)
+                
+                % Add current angle to prior reference
+                ref_rot = ref_rot + rot_ang;
+                
+                % Zero rotation angle for storage
+                rot_ang = 0;
+            end
             
-            % Add current angle to prior reference
-            ref_rot = ref_rot + rot_ang;
-            
-            % Zero rotation angle for storage
-            rot_ang = 0;
+             % Store net angle
+             S.ang(i,1) = ref_rot + rot_ang;
         end
         
         % Number of roi points
@@ -184,9 +187,6 @@ if strcmp(coordType,'roi')
         
         % Current roi
         S.roi(i) = giveROI('define','circular',numroipts,roi0.r,xC,yC);
-        
-        % Store net angle
-        S.ang(i,1) = ref_rot + rot_ang;
     end
 end
 
