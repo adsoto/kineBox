@@ -25,7 +25,7 @@ function varargout = imInteract(im,action,varargin)
 
 %% Parse inputs
 
-if strcmp(action,'points')
+if strcmp(action,'points') || strcmp(action,'point advance') 
     
     if nargin>2
         n = varargin{1};
@@ -106,6 +106,13 @@ if strcmp(action,'points')
                   'else; xPos = xPos(1:end-1);yPos = yPos(1:end-1);end'];
     B{i}.info = 'Right click: delete last point';  
 
+elseif strcmp(action,'point advance')    
+    % Left click
+    i = i + 1;
+    B{i}.key = 1;
+    B{i}.dostr = 'xPos = x; yPos = y;';
+    B{i}.info = 'Left click: select point';  
+     
 % Radius mode
 elseif strcmp(action,'radius')
     % Up arrow
@@ -218,7 +225,9 @@ end
 %% Prep for interaction 
 
 % Figure window
-f = figure;
+if ~strcmp(action,'point advance') 
+    f = figure;
+end
 
 % Give instructions
 giveInfo(B)
@@ -302,7 +311,7 @@ while true
         set(h, 'AlphaData', bw)
 
     % Show points, if needed
-    elseif strcmp(action,'points')
+    elseif strcmp(action,'points') || strcmp(action,'point advance')  
         
         h = plot(xPos,yPos,'g+');
         
@@ -416,6 +425,9 @@ while true
     elseif strcmp(action,'points')
         title(['Num points = ' num2str(length(xPos),'%4.0f')])  
         
+    elseif strcmp(action,'point advance')  
+        title('Select point')
+        
     elseif strcmp(action,'radius')
         title(['r = ' num2str(r,'%4.2f') ' pix'])      
         
@@ -427,7 +439,7 @@ while true
         [x,y,b] = ginput(1);
         
         % If return pressed
-        if isempty(b)
+        if isempty(b) && ~strcmp(action,'point advance')  
             break
         end
         
@@ -437,6 +449,10 @@ while true
                 eval(B{i}.dostr);
                 break
             end
+        end
+        
+        if strcmp(action,'point advance')  
+            break
         end
         
     % Break loop, if not in interactive mode
@@ -450,7 +466,9 @@ while true
 end
 
 % Close figure
-close(f);
+if ~strcmp(action,'point advance')  
+    close(f);
+end
 
 
 %% Selection processing
@@ -488,7 +506,7 @@ elseif strcmp(action,'threshold and selection')
     varargout{2} = xPos;
     varargout{3} = yPos;
     
-elseif strcmp(action,'points')
+elseif strcmp(action,'points') || strcmp(action,'point advance')  
     varargout{1} = xPos;
     varargout{2} = yPos;
     

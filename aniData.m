@@ -53,8 +53,7 @@ elseif strcmp(opType,'blobs L simple')
     imRoiMean  = varargin{6};
     dSample    = varargin{7};
     
-    frames = S.frames;
-      
+    frames = S.frames;      
     
 elseif strcmp(opType,'Centroid tracking')
        
@@ -68,7 +67,17 @@ elseif strcmp(opType,'Centroid tracking')
     else
         imVis = 1;
     end
+ 
+elseif strcmp(opType,'Pred + prey')
     
+    % Parse inputs
+    S_py   = varargin{1};
+    S_pd   = varargin{2};
+    L      = varargin{3};
+    imVis  = varargin{4};
+
+    numroipts = 400;
+    frames = S_pd.frames;    
     
 elseif strcmp(opType,'Pred-prey cent track')
     
@@ -80,8 +89,7 @@ elseif strcmp(opType,'Pred-prey cent track')
     imVis  = varargin{5};
 
     numroipts = 400;
-    frames = C_pd.frames;
-    
+    frames = C_pd.frames;    
     
 elseif strcmp(opType,'Centroid & Rotation')
        
@@ -129,11 +137,15 @@ if ~strcmp(opType,'blobs G&L')
         
         if strcmp(opType,'Centroid & Rotation')
             subplot(1,2,1)
+            
+        elseif strcmp(opType,'Pred + prey')
+            subplot(4,2,[1:4])
         end
         
         % Display frame
         h = imshow(im,'InitialMag','fit');
         hold on
+        title(['Frame ' num2str(frames(i))]);
         
         if strcmp(opType,'blobs G&L')
             
@@ -177,6 +189,67 @@ if ~strcmp(opType,'blobs G&L')
             % Plot tracking
             h(1) = line(xG,yG,'Color',[0 1 0 0.2],'LineWidth',3);
             h(2) = plot(xC,yC,'g+');
+        
+        elseif strcmp(opType,'Pred + prey')
+            
+            set(f,'WindowStyle','normal')
+            set(f,'Position',[1 1 881 692])
+            
+            % Colors
+            pyClr = [41 171 226]./255;
+            pdClr = [241 90 36]./255;
+            
+            
+            angPd = -L.ang_pd + S_pd.ang(i);
+            angPy = -L.ang_py + S_py.ang(i);
+            
+            thd = linspace(0,2*pi,400);
+            roiPd.x = (S_pd.roi(i).r-1).*cos(thd)+S_pd.roi(i).r+0.5;
+            roiPd.y = (S_pd.roi(i).r-1).*sin(thd)+S_pd.roi(i).r+0.5;
+            roiPy.x = (S_py.roi(i).r-1).*cos(thd)+S_py.roi(i).r+0.5;
+            roiPy.y = (S_py.roi(i).r-1).*sin(thd)+S_py.roi(i).r+0.5;
+            
+            % Current rois                
+            imPd = giveROI('stabilized',im,S_pd.roi(i),0,angPd);
+            imPy = giveROI('stabilized',im,S_py.roi(i),0,angPy);
+                 
+            % roi of pred in global frame
+            xGpd = S_pd.roi(i).xPerimG;
+            yGpd = S_pd.roi(i).yPerimG;
+            xCpd = [S_pd.roi(i).xCntr S_pd.roi(i).xCntr+S_pd.roi(i).r*cosd(-angPd)];
+            yCpd = [S_pd.roi(i).yCntr S_pd.roi(i).yCntr+S_pd.roi(i).r*sind(-angPd)];
+            
+            % roi of prey in global frame
+            xGpy = S_py.roi(i).xPerimG;
+            yGpy = S_py.roi(i).yPerimG;
+            xCpy = [S_py.roi(i).xCntr S_py.roi(i).xCntr+S_py.roi(i).r*cosd(-angPy)];
+            yCpy = [S_py.roi(i).yCntr S_py.roi(i).yCntr+S_py.roi(i).r*sind(-angPy)];
+            
+            % Plot tracking
+            h(1) = line(xGpd,yGpd,'Color',[pdClr 0.8],'LineWidth',2);
+            h(2) = line(xCpd,yCpd,'Color',[pdClr 0.8],'LineWidth',1);
+            h(3) = line(xGpy,yGpy,'Color',[pyClr 0.8],'LineWidth',1);
+            h(4) = line(xCpy,yCpy,'Color',[pyClr 0.8],'LineWidth',0.5);
+ 
+            subplot(4,2,[5 7])
+            imshow(imPd,'InitialMag','fit');
+            hold on
+            line(roiPd.x,roiPd.y,...
+                        'Color',[pdClr],'LineWidth',7);
+            line([S_pd.roi(i).r 2*S_pd.roi(i).r],[S_pd.roi(i).r S_pd.roi(i).r],...
+                        'Color',[pdClr 0.5],'LineWidth',2);      
+            hold off
+            
+            subplot(4,2,[6 8])
+            imshow(imPy,'InitialMag','fit');
+            hold on
+            line(roiPy.x,roiPy.y,...
+                        'Color',[pyClr],'LineWidth',7);
+            line([S_py.roi(i).r 2*S_py.roi(i).r],S_py.roi(i).r.*[1 1],...
+                        'Color',[pyClr 0.5],'LineWidth',2);
+            hold off
+            
+            
             
         elseif strcmp(opType,'Pred-prey cent track')
             
@@ -209,9 +282,7 @@ if ~strcmp(opType,'blobs G&L')
             h = imshow(im_roi,'InitialMag','fit');
             
         end
-        
-        
-        title(['Frame ' num2str(frames(i))]);
+ 
         
         if nargout>0
             % Capture frame

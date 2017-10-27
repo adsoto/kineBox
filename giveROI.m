@@ -164,15 +164,16 @@ if ~strcmp(action,'define')
             error('You need to provide tform if you want imStable');
         end
         
-        % Rotation angle passed as tform . . .
-        if length(tform)==1
-            rot_ang = tform;
-            
         % If tform exists, calculate angle . . .
-        else           
+        if isfield(tform,'T')        
             % Get angular rotation from tform
             tformInv = invert(tform);
             rot_ang  = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
+            
+        % Rotation angle passed as tform . . .
+        elseif length(tform)==1
+            rot_ang = tform;
+
         end
         
         imStable = imrotate(im_roi,-rot_ang,'bilinear','crop');
