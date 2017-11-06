@@ -116,6 +116,35 @@ end
 %% Create images
 
 if ~strcmp(action,'define')
+    
+    % Pad image to the left, if needed
+    if roi.rect(1)<1
+        n  = abs(roi.rect(1))+1;
+        im = [ones(size(im,1),n) im];
+        roi.rect(1) = 1;
+    end
+     
+    % Pad image to the top, if needed
+    if roi.rect(2)<1
+        n           = abs(roi.rect(2))+1;
+        im          = [ones(n,size(im,2)); im];
+        roi.rect(2) = 1;
+    end
+        
+    % Pad image to the right, if needed
+    if (roi.rect(1)+roi.rect(3)+1)>=size(im,2)
+        n = ceil(roi.rect(1)+roi.rect(3)+2 - size(im,2));
+        im = [im ones(size(im,1),n)];     
+    end
+    
+    % Pad image to the bottom, if needed
+    if (roi.rect(2)+roi.rect(4)+1)>=size(im,1)
+        n = ceil(roi.rect(2)+roi.rect(4)+2 - size(im,1));
+        im = [im; ones(n, size(im,2))];     
+    end
+    
+   clear n
+        
     % Binary mask in image im    
     bw_mask = roipoly(size(im,1),size(im,2),...
         [roi.rect(1) roi.rect(1)+roi.rect(3)+1 ...
@@ -127,6 +156,11 @@ if ~strcmp(action,'define')
     
     % Crop image
     im_roi  = imcrop(im,roi.rect);
+    
+    % Check that roi is square
+    if size(im_roi,1)~=size(im_roi,2)
+        error('Image not square and needs to be');
+    end
     
     if ~isempty(imMean)
         im_roi = imadjust(imcomplement(imsubtract(imMean,im_roi)));
@@ -152,11 +186,7 @@ if ~strcmp(action,'define')
         % White out pixels outside of circular roi
         %bw_roi = roipoly(size(im_roi,1),size(im_roi,2),round(yC*imFactor),round(xC*imFactor));
     end
-    
-    % Check that roi is square
-    if size(im_roi,1)~=size(im_roi,2)
-        error('Image not square and needs to be');
-    end
+
     
     if strcmp(action,'stabilized')
         

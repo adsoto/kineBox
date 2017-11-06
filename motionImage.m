@@ -141,7 +141,7 @@ if isempty(fr_num)
     if (1-exclude_prop)*numFrames > maxFrames
         dframe = floor(numFrames/maxFrames);
         frame1 = round(exclude_prop*numFrames);
-        fr_num = frame1:dframe:numFrames;
+        fr_num = v.UserData.FirstFrame+[frame1:dframe:numFrames]-1;
         clear dframe frame1
     else
         %fr_num = 1:numFrames;
