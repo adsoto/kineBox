@@ -14,7 +14,7 @@ function makeImageSeq(filename,pathname,varargin)
 
 % Prompt to browse to filename
 if nargin < 1
-    [filename,pathname] = uigetfile({'*.MP4';'*.mp4'});
+    [filename,pathname] = uigetfile({'*.MP4';'*.mp4';'*.MOV'});
 end
 
 if nargin>2

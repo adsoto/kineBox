@@ -136,7 +136,14 @@ if strcmp(coordType,'roi')
         S.tform       = Rotation.tform_roi;
         S.ref_frame   = Rotation.ref_frame;
         %S.rot_deg     = Rotation_net;
-             
+        
+    elseif length(Rotation)==1 && isfield(Rotation,'rot_ang')
+        
+        S.ang         = Rotation.rot_ang;   
+        S.tform       = [];
+        S.ref_frame   = Rotation.ref_frame;
+        %S.rot_deg     = Rotation_net;
+        
     elseif ~isempty(Rotation) && length(Rotation)~=length(Centroid.x)
         error('mismatch in length of data sources');
         

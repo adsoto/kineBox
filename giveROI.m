@@ -195,7 +195,7 @@ if ~strcmp(action,'define')
         end
         
         % If tform exists, calculate angle . . .
-        if isfield(tform,'T')        
+        if isprop(tform,'T')       
             % Get angular rotation from tform
             tformInv = invert(tform);
             rot_ang  = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
