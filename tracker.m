@@ -120,7 +120,8 @@ elseif strcmp(method,'body rotation')
         yMask = varargin{6};
     end
     
-elseif strcmp(method,'advanced rotation')
+elseif strcmp(method,'advanced rotation') || ...
+       strcmp(method,'advanced rotation with mask')
 
     r          = varargin{1};
     Centroid   = varargin{2};
@@ -239,7 +240,8 @@ elseif strcmp(method,'body rotation')
    % roi = roi0;
    
 % If advanced rotation . . .
-elseif strcmp(method,'advanced rotation')
+elseif strcmp(method,'advanced rotation') || ...
+       strcmp(method,'advanced rotation with mask')
     
     % Initialize image registration parameters
     [optimizer, metric]  = imregconfig('monomodal');
@@ -266,6 +268,11 @@ elseif strcmp(method,'advanced rotation')
     %[im0,roi_mask,roi_rect] = isolate_roi(im0,Centroid.x_pix(1),Centroid.y_pix(1),Centroid.r_pix,theta);
     [im_roi0,bw_mask] = giveROI('unstabilized',im0,roi,dSample);
    
+    % Add mask
+    if strcmp(method,'advanced rotation with mask')
+        im_roi0 = addmask(im_roi0);
+    end
+    
     % Set starting roi structure
    % roi = roi0;
 end
@@ -318,14 +325,14 @@ for i = 1:length(frames)
         roi = giveROI('define','circular',numroipts,iC.r,cX,cY);
         
         % Make binary mask of tank region
-        %bwMask = roipoly(im,roi.xPerimG,roi.yPerimG);
-        bwMask = roipoly(im,xMask,yMask);
+        bwMask = roipoly(im,roi.xPerimG,roi.yPerimG);
+        %bwMask = roipoly(im,xMask,yMask);
 
         % Eliminate outside of roi
         im(~bwMask) = 255;
         
         % Find blob at cX,cY
-        [props,bwOut] = findBlobs(im,iC.tVal,'coord advanced',cX,cY);
+        [props,bwOut] = findBlobs(im,iC.tVal,'coord advanced',cX,cY,[],'trim fins');
         
         % Store results
         Centroid.x(i,1) = props.Centroid(1);
@@ -370,8 +377,7 @@ for i = 1:length(frames)
                   
          % Give image, unstabilized (i.e. unrotated)
          [im_roi,bw_mask] = giveROI('unstabilized',im,roi,dSample);
-         
-         
+    
          % Focus on roi
 %         [im_roi,imMask,roi_rect] = isolate_roi(im,Centroid.x_pix(i),...
 %             Centroid.y_pix(i),Centroid.r_pix,theta);
@@ -379,21 +385,16 @@ for i = 1:length(frames)
          % Transformation object to stablize head wrt im0
          tform = imregtform(im_roi,im_roi0,'rigid',optimizer,metric);
 
-         
-         
-%          % Include rotation in plotting
-%          includeRot = 1;
-
         % Store results
         Rotation(i).tform_roi = tform;
        % Rotation(i).roi_rect = roi_rect;
          
         % Clear for next iteration
-        clear im_roi tform_roi imStable xC yC h imMask im_roi
-        
+        clear im_roi tform_roi imStable xC yC h imMask im_roi       
         
     % body rotation method: 
-    elseif strcmp(method,'advanced rotation')
+    elseif strcmp(method,'advanced rotation') || ...
+           strcmp(method,'advanced rotation with mask')
         
         % Current center points
         cX = Centroid.x(i);
@@ -405,34 +406,17 @@ for i = 1:length(frames)
         % Eliminate outside of mask
         im(~bwMask) = 255;
 
-        
-                  
-%          % Give image, unstabilized (i.e. unrotated)
-%          [im_roi,bw_mask_roi] = giveROI('unstabilized',im,roi,dSample);
-
-         % Transformation object to stablize head wrt im0
-%          tform = imregtform(im_roi,im_roi0,'rigid',optimizer,metric);
-%             
-%          % Get angular rotation up to this point
-%          tformInv = invert(tform);         
-%          rot_ang = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
-%          
-%          % Find change in angle between frames
-%          if i>1
-%              last_ang = atan2(Rotation.tform_roi(i-1).T(2,1),...
-%                               Rotation.tform_roi(i-1).T(1,1))*180/pi;
-%                           
-%              Drot_ang = rot_ang - last_ang;
-%              
-%              clear last_ang
-%          end
-
         % Current roi
         roi = giveROI('define','circular',numroipts,r,cX,cY);
 
         % Give image, unstabilized (i.e. unrotated)
         [im_roi,bw_mask_roi] = giveROI('unstabilized',im,roi,dSample);
-            
+           
+        % If masking . . .
+        if strcmp(method,'advanced rotation with mask')          
+            im_roi = addmask(im_roi);
+        end
+        
          % If first frame . . .
          if i==1
              
@@ -442,26 +426,22 @@ for i = 1:length(frames)
              % Mark keyframe
              Rotation.ref_frame(i,1) = 1;            
 
-             % Transformation object to stablize head wrt im0
-             %tform = imregtform(im_roi,im_roi0,'rigid',optimizer,metric);
-             
              % Angular rotation up to this point
              Rotation.rot_ang(i,1) = 0;
              
+             % Current roi image
              im_roi0curr = im_roi0;
              
          % If after first frame . . .
          else
-             
-             
-
-         
-             % Angle from last frame
-%              last_ang = -atan2(Rotation.tform_roi(i-1).T(2,1),...
-%                  Rotation.tform_roi(i-1).T(1,1))*180/pi;
-             
+  
              % Rotation reference image to last rotated angle
              im_roi0curr = giveROI('stabilized',im0,roi0,dSample,-Rotation.rot_ang(i-1));
+             
+             % If masking . . .
+             if strcmp(method,'advanced rotation with mask')
+                 im_roi0curr = addmask(im_roi0curr);
+             end
              
              % Transformation object to stablize head wrt im0
              tform = imregtform(im_roi,im_roi0curr,'rigid',optimizer,metric);
@@ -479,117 +459,15 @@ for i = 1:length(frames)
              Rotation.rot_ang(i,1)  = Rotation.rot_ang(i-1,1) + Drot_ang;
              
              % No keyframe
-             Rotation.ref_frame(i,1) = 0;
-             
-             
-             % Transformation object to stablize head wrt im0
-         %tform = imregtform(im_roi,im_roi0,'rigid',optimizer,metric);
-             
-%          % If current frame jumps in rotation . . .
-%          elseif abs(Drot_ang) > rot_thresh
-%              
-%              % Last image, roi, roi image for reference
-%              imLast = getFrame(vid_path,v,frames(i-1),imInvert,'gray',imMean);             
-%              roiLast = giveROI('define','circular',numroipts,roi.r,...
-%                       Centroid.x(i-1),Centroid.y(i-1));                  
-%              im_roi0 = giveROI('unstabilized',imLast,roiLast,dSample);
-% 
-%              % Mark prior image as keyframe
-%              Rotation.ref_frame(i-1,1) = 1;
-%              
-%              clear imLast roiLast
-%              
-%              last_ang = 0;
-%              
-%              % Advance thru frames to find jump duration
-%              for j = 1:10
-%                  
-%                  % Index of present frame
-%                  i_tmp = i+j-1;
-% 
-%                  % Current image
-%                  im_tmp = getFrame(vid_path,v,frames(i_tmp),imInvert,'gray',imMean);
-%                  
-%                  roi_tmp = giveROI('define','circular',numroipts,roi.r,...
-%                       Centroid.x(i_tmp),Centroid.y(i_tmp));                  
-%                  im_roi_tmp = giveROI('unstabilized',im_tmp,roi_tmp,dSample);
-%              
-%                  % Transformation object to stablize head wrt im0
-%                  tform_tmp = imregtform(im_roi_tmp,im_roi0,'rigid',optimizer,metric);
-%                  
-%                  % Get angular rotation up to this point
-%                  tformInv = invert(tform_tmp);
-%                  rot_ang = atan2(tformInv.T(2,1),tformInv.T(1,1))*180/pi;
-%                  
-%                  rots(j,1) = rot_ang;
-%                  
-%                  if (rot_ang-last_ang)<rot_thresh/4
-%                      fff=0;
-%                  end
-%                  clear i_tmp im_tmo roi_tmp im_roi tform_tmp tformInv rot_ang
-%              end
-%              
-%              
-%              %TODO: Figure out duration of rotation
-%              
-%              numBefore = 3;
-%              
-%              % Zero current angle
-%              %rot_ang = 0;
-%              
-%              % Reset transformation matrix
-%              %tform.T = eye(3);
-%              
-%              % Index of frame before jump in rotation
-%              iBefore = max([1 i-numBefore]);
-%              
-%              
-%     
-%              % Store current image as reference
-%              im_roi0 = im_roi;
-% 
-%              % Mark keyframe
-%              Rotation.ref_frame(iBefore,1) = 1;
-%              
-%              clear numBefore
-%              
-%          % If rotation since last keyframe is above threshold . . .
-%          elseif abs(rot_ang) > rot_thresh
-% 
-%              % Store current image as reference
-%              im_roi0 = im_roi;
-% 
-%              % Mark keyframe
-%              Rotation.ref_frame(i,1) = 1;
-%              
-%              % No jump in rotation
-%              Rotation.jump(i,1) = 0;
-%              
-%              clear numBefore
-%          else
-%              
-% 
-%              % No jump in rotation
-%              Rotation.jump(i,1) = 0;
-             
+             Rotation.ref_frame(i,1) = 0;           
          end
-         
-        % Store results
-        %Rotation.tform_roi(:,:,i) = tform;       
-        
-%         Rotation.rot_net(i,1)     = rot_ang_net;
-        
-       % Rotation(i).roi_rect = roi_rect;
-         
-       % Calculate 
-
     end
     
     % Update status
     disp(['tracker (' method ') : done ' num2str(i) ' of ' num2str(length(frames))])   
     
-    % Visualize, for debugging 
-    if 0
+    % Visualize rotation, for debugging 
+    if 1
         
         %imStable = giveROI('stabilized',im,roi,dSample,tform);
         imStable = giveROI('stabilized',im,roi,dSample,Rotation.rot_ang(i,1));
@@ -632,20 +510,33 @@ for i = 1:length(frames)
 %             visTrack(im,Centroid.x(i),Centroid.y(i),r,theta,...
 %                 Rotation(i).tform_roi,t_txt);
             
-        % If no rotation
-        else
-
-%             % Visualization code
-%             visTrack(im,Centroid.x_pix(i),Centroid.y_pix(i),Centroid.r_pix,...
-%                 theta,[],t_txt);
+            % Pause briefly to render
+            pause(0.001)
         end
+    end
+        
+    % Visualize centroid, for debugging 
+    if 0
+        
+        % Title text
+        t_txt = ['Frame ' num2str(cFrame) '/' num2str(frames(end))];
+
+        imshow(im,'InitialMag','fit')
+        if 1
+            brighten(-0.8)
+        end
+        % brighten(-0.7)
+        hold on
+        plot(cX,cY,'g+')
+        title(t_txt)
+        hold off
         
         % Pause briefly to render
         pause(0.001)
     end
-    
+
      % Clear for next iteration
-     clear im_roi tform_roi imStable xC yC h imMask im_roi
+     clear im_roi tform_roi imStable xC yC h imMask im_roi t_txt
 
 end
 
@@ -660,7 +551,8 @@ if strcmp(method,'threshold translation') || ...
         varargout{1} = Centroid;
             
 % Body rotation method    
-elseif strcmp(method,'body rotation') || strcmp(method,'advanced rotation')
+elseif strcmp(method,'body rotation') || strcmp(method,'advanced rotation') || ...
+           strcmp(method,'advanced rotation with mask')
     
     varargout{1} = Rotation;
     
@@ -673,6 +565,36 @@ elseif strcmp(method,'visualize')
     end
 end
 
+function im = addmask(im)
+% % Adds a regular mask to image -------
+% im1 = imadjust(im);
+% bw = im2bw(im1,graythresh(im1));
+% se = strel('disk',3,4);
+% bw = imdilate(~bw,se);
+% im(~bw) = 255;
 
+% Mask with distance map (trims fins) -------
+% Enhance contrast
+im1 = imadjust(im);
+
+% Binary image
+bw = im2bw(im1,graythresh(im1));
+
+% Distance map
+bwD = bwdist(bw);
+
+% Max distance
+maxDist = max(bwD(:));
+
+% Threshold distance
+threshDist = maxDist/3;
+
+% Refine binary as above-threshold images
+bw = bwD>threshDist;
+
+% Dilate, white out outside
+se = strel('disk',3,4);
+bw = imdilate(bw,se);
+im(~bw) = 255;
 
 

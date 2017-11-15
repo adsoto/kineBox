@@ -117,30 +117,32 @@ end
 
 if ~strcmp(action,'define')
     
+    pixval = 255;
+    
     % Pad image to the left, if needed
     if roi.rect(1)<1
         n  = abs(roi.rect(1))+1;
-        im = [ones(size(im,1),n) im];
+        im = [ones(size(im,1),n).*pixval im];
         roi.rect(1) = 1;
     end
      
     % Pad image to the top, if needed
     if roi.rect(2)<1
         n           = abs(roi.rect(2))+1;
-        im          = [ones(n,size(im,2)); im];
+        im          = [ones(n,size(im,2)).*pixval; im];
         roi.rect(2) = 1;
     end
         
     % Pad image to the right, if needed
     if (roi.rect(1)+roi.rect(3)+1)>=size(im,2)
         n = ceil(roi.rect(1)+roi.rect(3)+2 - size(im,2));
-        im = [im ones(size(im,1),n)];     
+        im = [im ones(size(im,1),n).*pixval];     
     end
     
     % Pad image to the bottom, if needed
     if (roi.rect(2)+roi.rect(4)+1)>=size(im,1)
         n = ceil(roi.rect(2)+roi.rect(4)+2 - size(im,1));
-        im = [im; ones(n, size(im,2))];     
+        im = [im; ones(n, size(im,2)).*pixval];     
     end
     
    clear n

@@ -26,6 +26,12 @@ elseif strcmp(bMode,'coord advanced')
         areaLast = [];
     end
     
+    if nargin >6
+        specialAction = varargin{4};
+    else
+        specialAction = [];
+    end
+    
 elseif strcmp(bMode,'area and circ')
     areaMin = varargin{1};
     areaMax = varargin{2};
@@ -127,6 +133,16 @@ elseif strcmp(bMode,'coord')
     
     
 elseif strcmp(bMode,'coord advanced')
+    
+    % Trim fins, if requested
+    if strcmp(specialAction,'trim fins')
+        bw2 = bwdist(~bw);
+        bw2 = imadjust(bw2./max(bw2(:)));
+        tVal = min([1 2*graythresh(bw2)]);
+        bw = im2bw(bw2,tVal);
+        
+        clear bw2 tVal
+    end
     
     % Dialate the binary image a bit
     se = strel('disk',3,4);    
