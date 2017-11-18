@@ -71,7 +71,8 @@ if strcmp(method,'threshold translation')
         yMask = varargin{6};
     end
     
-elseif strcmp(method,'thresh trans advanced')
+elseif strcmp(method,'thresh trans advanced') || ...
+        strcmp(method,'thresh trans advanced with mask')
     
     iC      = varargin{1};
     
@@ -92,6 +93,11 @@ elseif strcmp(method,'thresh trans advanced')
     % Mask coordinates image
     xMask = varargin{4};
     yMask = varargin{5};
+    
+    if strcmp(method,'thresh trans advanced with mask')
+       Centroid_pd  = varargin{6};
+       iCPd         = varargin{7};
+    end
     
     numroipts = 400;
        
@@ -121,7 +127,8 @@ elseif strcmp(method,'body rotation')
     end
     
 elseif strcmp(method,'advanced rotation') || ...
-       strcmp(method,'advanced rotation with mask')
+       strcmp(method,'advanced rotation with mask') || ...
+       strcmp(method,'advanced rotation with simple mask')
 
     r          = varargin{1};
     Centroid   = varargin{2};
@@ -148,6 +155,10 @@ elseif strcmp(method,'advanced rotation') || ...
     else
         % Downsample images for image registration
         dSample = 0;
+    end
+    
+    if strcmp(method,'advanced rotation with simple mask')
+        tVal = varargin{8};
     end
     
     % Threshold rotation at which a reference frame is created (deg)
@@ -199,7 +210,8 @@ if strcmp(method,'threshold translation') || ...
     cX = roi0.xCntr;
     cY = roi0.yCntr;
     
-elseif strcmp(method,'thresh trans advanced')
+elseif strcmp(method,'thresh trans advanced') || ...
+       strcmp(method,'thresh trans advanced with mask')
     
     % Define frames
     Centroid.frames = frames;   
@@ -241,7 +253,8 @@ elseif strcmp(method,'body rotation')
    
 % If advanced rotation . . .
 elseif strcmp(method,'advanced rotation') || ...
-       strcmp(method,'advanced rotation with mask')
+       strcmp(method,'advanced rotation with mask') || ...
+       strcmp(method,'advanced rotation with simple mask')
     
     % Initialize image registration parameters
     [optimizer, metric]  = imregconfig('monomodal');
@@ -271,6 +284,9 @@ elseif strcmp(method,'advanced rotation') || ...
     % Add mask
     if strcmp(method,'advanced rotation with mask')
         im_roi0 = addmask(im_roi0);
+        
+    elseif strcmp(method,'advanced rotation with simple mask')
+        im_roi0 = addsimplemask(im_roi0,tVal);
     end
     
     % Set starting roi structure
@@ -319,10 +335,11 @@ for i = 1:length(frames)
         % Clear for next loop
         clear tmp_x tmp_y
         
-    elseif strcmp(method,'thresh trans advanced')    
+    elseif strcmp(method,'thresh trans advanced') || ...
+           strcmp(method,'thresh trans advanced with mask')
         
         % Current roi
-        roi = giveROI('define','circular',numroipts,iC.r,cX,cY);
+        roi = giveROI('define','circular',numroipts,2*iC.r,cX,cY);
         
         % Make binary mask of tank region
         bwMask = roipoly(im,roi.xPerimG,roi.yPerimG);
@@ -330,6 +347,17 @@ for i = 1:length(frames)
 
         % Eliminate outside of roi
         im(~bwMask) = 255;
+        
+        % If mask for predator needed . . .
+        if strcmp(method,'thresh trans advanced with mask')
+            
+            % Make predator mask
+            pdMask = ~im2bw(im,iC.tVal);
+            pdMask = bwselect(pdMask,round(Centroid_pd.x),round(Centroid_pd.y));
+            
+            % White out mask pixels
+            im(pdMask) = 255;
+        end
         
         % Find blob at cX,cY
         [props,bwOut] = findBlobs(im,iC.tVal,'coord advanced',cX,cY,[],'trim fins');
@@ -344,7 +372,7 @@ for i = 1:length(frames)
         cY = props.Centroid(2);
         
         % Clear for next loop
-        clear tmp_x tmp_y
+        clear tmp_x tmp_y pdMask
         
     % Threshold method: find centroid coordinates
     elseif strcmp(method,'threshold roi')
@@ -394,7 +422,8 @@ for i = 1:length(frames)
         
     % body rotation method: 
     elseif strcmp(method,'advanced rotation') || ...
-           strcmp(method,'advanced rotation with mask')
+           strcmp(method,'advanced rotation with mask') || ...
+           strcmp(method,'advanced rotation with simple mask')
         
         % Current center points
         cX = Centroid.x(i);
@@ -415,6 +444,9 @@ for i = 1:length(frames)
         % If masking . . .
         if strcmp(method,'advanced rotation with mask')          
             im_roi = addmask(im_roi);
+            
+        elseif strcmp(method,'advanced rotation with simple mask')
+            im_roi = addsimplemask(im_roi,tVal);
         end
         
          % If first frame . . .
@@ -467,7 +499,7 @@ for i = 1:length(frames)
     disp(['tracker (' method ') : done ' num2str(i) ' of ' num2str(length(frames))])   
     
     % Visualize rotation, for debugging 
-    if 1
+    if 0
         
         %imStable = giveROI('stabilized',im,roi,dSample,tform);
         imStable = giveROI('stabilized',im,roi,dSample,Rotation.rot_ang(i,1));
@@ -546,13 +578,16 @@ end
 % Threshold method
 if strcmp(method,'threshold translation') || ...
         strcmp(method,'threshold roi') || ...
-        strcmp(method,'thresh trans advanced')
+        strcmp(method,'thresh trans advanced') || ...
+        strcmp(method,'thresh trans advanced with mask')
     
         varargout{1} = Centroid;
             
 % Body rotation method    
-elseif strcmp(method,'body rotation') || strcmp(method,'advanced rotation') || ...
-           strcmp(method,'advanced rotation with mask')
+elseif strcmp(method,'body rotation') || ...
+       strcmp(method,'advanced rotation') || ...
+       strcmp(method,'advanced rotation with mask') || ...
+       strcmp(method,'advanced rotation with simple mask')
     
     varargout{1} = Rotation;
     
@@ -566,14 +601,8 @@ elseif strcmp(method,'visualize')
 end
 
 function im = addmask(im)
-% % Adds a regular mask to image -------
-% im1 = imadjust(im);
-% bw = im2bw(im1,graythresh(im1));
-% se = strel('disk',3,4);
-% bw = imdilate(~bw,se);
-% im(~bw) = 255;
+% Mask with distance map (trims fins)
 
-% Mask with distance map (trims fins) -------
 % Enhance contrast
 im1 = imadjust(im);
 
@@ -595,6 +624,15 @@ bw = bwD>threshDist;
 % Dilate, white out outside
 se = strel('disk',3,4);
 bw = imdilate(bw,se);
+im(~bw) = 255;
+
+function im = addsimplemask(im,tVal)
+% Adds a regular mask to image
+%im1 = imadjust(im);
+im1 = im;
+bw = im2bw(im1,tVal);
+se = strel('disk',3,4);
+bw = imdilate(~bw,se);
 im(~bw) = 255;
 
 
