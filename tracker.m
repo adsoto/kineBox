@@ -353,14 +353,20 @@ for i = 1:length(frames)
             
             % Make predator mask
             pdMask = ~im2bw(im,iC.tVal);
-            pdMask = bwselect(pdMask,round(Centroid_pd.x),round(Centroid_pd.y));
+            pdMask = bwselect(pdMask,Centroid_pd.x(i),Centroid_pd.y(i));
             
             % White out mask pixels
             im(pdMask) = 255;
+            
+            % Find blob at cX,cY
+            [props,bwOut] = findBlobs(im,iC.tVal,'coord advanced',cX,cY,[]);
+            
+        else
+            % Find blob at cX,cY
+            [props,bwOut] = findBlobs(im,iC.tVal,'coord advanced',cX,cY,[],'trim fins');
         end
         
-        % Find blob at cX,cY
-        [props,bwOut] = findBlobs(im,iC.tVal,'coord advanced',cX,cY,[],'trim fins');
+        
         
         % Store results
         Centroid.x(i,1) = props.Centroid(1);
