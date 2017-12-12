@@ -32,7 +32,25 @@ elseif strcmp(bMode,'coord advanced')
         specialAction = [];
     end
     
+elseif strcmp(bMode,'advanced comparison')
+    
+    x        = varargin{1};
+    y        = varargin{2};
+    
+    if length(varargin) > 2
+        propLast = varargin{3};
+    else
+        propLast = [];
+    end
+    
+    if length(varargin) > 3
+        specialAction = varargin{4};
+    else
+        specialAction = [];
+    end
+    
 elseif strcmp(bMode,'area and circ')
+    
     areaMin = varargin{1};
     areaMax = varargin{2};
     AR_max  = varargin{3};
@@ -41,6 +59,7 @@ elseif strcmp(bMode,'coord')
     x = varargin{1};
     y = varargin{2};
     
+    
 else
     error('bMode not recognized');
 end
@@ -48,14 +67,22 @@ end
 
 %% Make binary image
 
-% Make binary
-bw = im2bw(im,tVal);
+if strcmp(bMode,'advanced comparison')
+    
+    % Make binary with darkest pixels
+    tVals = multithresh(im,3);
+    bw = ~(im<tVals(2));
+     
+else
+    % Make binary
+    bw = im2bw(im,tVal);
+end
 
 % Fill holes
 bw = imfill(~bw,'holes');
 
 % Start with black image
-bwOut = bw.*0~=0;   
+bwOut = bw.*0~=0;
 
 
 %% Select blobs, according to mode
@@ -138,15 +165,16 @@ elseif strcmp(bMode,'coord advanced')
     if strcmp(specialAction,'trim fins')
         bw2 = bwdist(~bw);
         bw2 = imadjust(bw2./max(bw2(:)));
-        tVal = min([1 2*graythresh(bw2)]);
+        tVal = min([1 graythresh(bw2)]);
         bw = im2bw(bw2,tVal);
         
         clear bw2 tVal
     end
     
-    % Dialate the binary image a bit
+    % Dialate & erode the binary image a bit
     se = strel('disk',3,4);    
     bw = imdilate(bw,se);
+    bw = imerode(bw,se);
     
     % Try to get blob on coordinate ------------
     bwS = bwselect(bw,x,y);
@@ -154,32 +182,32 @@ elseif strcmp(bMode,'coord advanced')
     % Survey blobs
     propOut = regionprops(bwS,'Centroid','Area',...
         'MajorAxisLength','MinorAxisLength',...
-        'PixelIdxList','PixelList');
+        'PixelIdxList','PixelList','Eccentricity','Perimeter');
     
-    % If that fails, get blob closest to last
+    % If that fails, decide among blobs
     if isempty(propOut)
         
         % Survey blobs
         props = regionprops(bw,'Centroid','Area',...
             'MajorAxisLength','MinorAxisLength',...
-            'PixelIdxList','PixelList');
+            'PixelIdxList','PixelList','Eccentricity','Perimeter');
         
         minDist = inf;
         
         if isempty(props)
             error('Lost blob -- maybe try different treshold or roi radius')
             
-        elseif length(props)>1
-            for i = 1:length(props)  
+        elseif length(props)>1 
+            for i = 1:length(props)
                 
                 % Distance of current blob from last
                 currDist = hypot(x-props(i).Centroid(1),y-props(i).Centroid(2));
                 
                 if ~isempty(areaLast) && ...
-                   (props(i).Area > areaLast/2) && ...
-                   (currDist < minDist)  && ...
-                    (props(i).Area < areaLast*2)
-               
+                        (props(i).Area > areaLast/2) && ...
+                        (currDist < minDist)  && ...
+                        (props(i).Area < areaLast*2)
+                    
                     minDist = currDist;
                     propOut = props(i);
                 end
@@ -192,27 +220,85 @@ elseif strcmp(bMode,'coord advanced')
                     % Distance of current blob from last
                     currDist = hypot(x-props(i).Centroid(1),y-props(i).Centroid(2));
                     
-                    if currDist < minDist                          
+                    if currDist < minDist
                         minDist = currDist;
                         propOut = props(i);
                     end
-                end
-                
-                
+                end 
             end
+            
         end
-    end   
-    
-    if isempty(propOut)
-        error('Lost blob -- maybe try different treshold or roi radius')
     end
-    
+
     % Add to area
     areas = propOut.Area;
             
     % Add white pixels for current blob
     bwOut(propOut.PixelIdxList) = 1;
 
+    
+elseif strcmp(bMode,'advanced comparison')
+    
+    % Trim fins, if requested
+    if strcmp(specialAction,'trim fins')
+        bw2 = bwdist(~bw);
+        bw = bw2>max(bw2(:)*.25);
+%         bw2 = imadjust(bw2./max(bw2(:)));
+%         tVal = min([1 2*graythresh(bw2)]);
+%         bw = im2bw(bw2,tVal);
+        
+        clear bw2 tVal
+    end
+    
+    % Dialate & erode the binary image a bit
+    se = strel('disk',3,4);    
+    bw = imdilate(bw,se);
+    bw = imerode(bw,se);
+  
+    % Survey blobs
+    props = regionprops(bw,'Centroid','Area',...
+        'MajorAxisLength','MinorAxisLength',...
+        'PixelIdxList','PixelList','Eccentricity','Perimeter');
+    
+    minDist = inf;
+    
+    if isempty(props)
+        error('Lost blob -- maybe try different treshold or roi radius')
+        
+    elseif length(props)>1 
+        
+        for j = 1:length(props)
+            
+            % Change in properties
+            dArea   = abs(props(j).Area-propLast.Area);
+            %dEcc    = abs(props(j).Eccentricity - propLast.Eccentricity);
+            %dPerim  = abs(props(j).Perimeter - propLast.Perimeter);
+            dCenter = hypot(x-props(j).Centroid(1),y-props(j).Centroid(2));
+            
+            % Match metric
+%             diffMetric(j,1) = sqrt(dArea)./sqrt(propLast.Area) * ...
+%                 dEcc./propLast.Eccentricity * ...
+%                 dPerim./propLast.Perimeter * ...
+%                 dCenter/length(bw);
+             diffMetric(j,1) = sqrt(dArea)./sqrt(propLast.Area) * ...
+                dCenter/length(bw);
+        end
+        
+        % Forward only the best blob
+        iBest = find(diffMetric==min(diffMetric),1,'first');
+        propOut = props(iBest);
+        
+    else
+        propOut = props;
+    end
+    
+
+    % Add to area
+    areas = propOut.Area;
+            
+    % Add white pixels for current blob
+    bwOut(propOut.PixelIdxList) = 1;    
+    
 end
 
  % Trace perimeter

@@ -1,4 +1,4 @@
-function varargout = aniData(vid_path,v,imInvert,opType,varargin)
+function varargout = aniData(vid_path,v,data_path,movie_file,imInvert,opType,varargin)
 % Animates blobs that may be extracted from a video
 % M = anaBlobs(vid_path,v,imInvert,display,opType)
 %  M - movie object
@@ -20,6 +20,14 @@ function varargout = aniData(vid_path,v,imInvert,opType,varargin)
 %% Parameters
 
 alphaLevel = 0.75;
+vidQuality = 50;
+
+
+% Set up output video file
+vOut = VideoWriter([data_path filesep movie_file '.mp4'],'MPEG-4');
+vOut.Quality = 50;
+
+open(vOut)
 
 
 %% Parse inputs
@@ -101,6 +109,67 @@ elseif strcmp(opType,'Centroid & Rotation')
     else
         imVis = 1;
     end
+    
+elseif strcmp(opType,'Body')
+       
+%     % Load body data (Body)
+%     load([data_path filesep data_file])
+%     
+%      % Load initial conditions (iC)
+%     load([data_path filesep 'Initial conditions'])
+    
+    % Data 
+    Body = varargin{1}; 
+     
+%     frames = Body.frames;    
+%     numroipts = length(S.roi(1).xPerimL);    
+    if length(varargin) > 1
+        imVis = varargin{2};
+    else
+        imVis = 1;
+    end
+    
+    % Vector of (non-nan) frames
+    frames = Body.frames(~isnan(Body.x));
+    
+elseif strcmp(opType,'Body arm')
+
+    % Data 
+    Body = varargin{1}; 
+
+    if length(varargin) > 1
+        imVis = varargin{2};
+    else
+        imVis = 1;
+    end
+    
+    iC = varargin{3};
+    
+    
+    % Vector of (non-nan) frames
+    frames = Body.frames(~isnan(Body.x));  
+       
+elseif strcmp(opType,'Body pred prey')
+       
+    
+    % Data 
+    bodPy = varargin{1}; 
+    bodPd = varargin{2}; 
+    iC    = varargin{3}; 
+     
+%     frames = Body.frames;    
+%     numroipts = length(S.roi(1).xPerimL);    
+    if length(varargin) > 1
+        imVis = varargin{4};
+    else
+        imVis = 1;
+    end
+    
+    % Vector of (non-nan) frames
+    frames = bodPd.frames(~isnan(bodPd.x));
+    
+    L.ang_pd = 0;
+    L.ang_py = 0;
 end
 
 
@@ -135,10 +204,14 @@ if ~strcmp(opType,'blobs G&L')
                 S.tform(:,:,i),imRoiMean);
         end
         
-        if strcmp(opType,'Centroid & Rotation')
+        if strcmp(opType,'Centroid & Rotation') || ...
+                strcmp(opType,'Body') 
             subplot(1,2,1)
             
-        elseif strcmp(opType,'Pred + prey')
+        elseif strcmp(opType,'Body arm')
+            subplot(2,2,[1 3])
+            
+        elseif strcmp(opType,'Pred + prey') || strcmp(opType,'Body pred prey')
             subplot(4,2,[1:4])
         end
         
@@ -188,8 +261,145 @@ if ~strcmp(opType,'blobs G&L')
             
             % Plot tracking
             h(1) = line(xG,yG,'Color',[0 1 0 0.2],'LineWidth',3);
-            h(2) = plot(xC,yC,'g+');
-        
+            h(2) = plot(xC,yC,'g+');         
+            
+            
+        elseif strcmp(opType,'Body')
+            
+            % Index for frame
+            iFrame = find(frames(i)==Body.frames,1,'first');
+            
+            
+            % Use roi from previous frame
+            roi = giveROI('define','circular',400,iC.r,...
+                          Body.x(iFrame),Body.y(iFrame));
+            
+            % Stabilized image         
+            imStable =  giveROI('stabilized',im,roi,0,Body.rot_ang(iFrame));
+            
+            line(roi.xPerimG,roi.yPerimG,'Color',[1 0 0 0.2],'LineWidth',2);
+            
+            % Add title
+            title(['Frame ' num2str(frames(i))])
+            
+            subplot(1,2,2)
+            imshow(imStable,'InitialMag','fit')
+            hold on
+            %plot(roi.xPerimL,roi.yPerimL,'k-')
+            line(roi.xPerimL,roi.yPerimL,'Color',[1 0 0 0.2],'LineWidth',4);
+            hold off        
+            brighten(-0.7)
+            
+            
+       elseif strcmp(opType,'Body arm')
+            
+            % Index for frame
+            iFrame = find(frames(i)==Body.frames,1,'first');
+            
+            % Use roi from previous frame
+            roi = giveROI('define','circular',400,iC.r,...
+                          Body.x(iFrame),Body.y(iFrame));
+                      
+            % Use roi from previous frame
+            roiMouth = giveROI('define','circular',400,iC.rMouth,...
+                          Body.x(iFrame),Body.y(iFrame));
+            
+            % Stabilized image         
+            imStable =  giveROI('stabilized',im,roi,0,Body.ang(iFrame));
+            mouthStable = giveROI('stabilized',im,roiMouth,0,Body.ang(iFrame));
+            
+            line(roi.xPerimG,roi.yPerimG,'Color',[1 0 0 0.2],'LineWidth',2);
+            line(roiMouth.xPerimG,roiMouth.yPerimG,'Color',[1 0 0 0.2],'LineWidth',2);
+            
+            % Add title
+            title(['Frame ' num2str(frames(i))])
+            
+            subplot(2,2,2)
+            imshow(imStable,'InitialMag','fit')
+            hold on
+            %plot(roi.xPerimL,roi.yPerimL,'k-')
+            line(roi.xPerimL,roi.yPerimL,'Color',[1 0 0 0.2],'LineWidth',4);
+            hold off        
+            brighten(-0.7)  
+            
+            subplot(2,2,4)
+            imshow(mouthStable,'InitialMag','fit')
+            hold on
+            %plot(roi.xPerimL,roi.yPerimL,'k-')
+            line(roiMouth.xPerimL,roiMouth.yPerimL,'Color',[1 0 0 0.2],'LineWidth',4);
+            hold off        
+            brighten(-0.2)            
+
+            
+       elseif strcmp(opType,'Body pred prey')
+           
+           % Index for frame
+            iFrame = find(frames(i)==bodPd.frames,1,'first');
+            
+            set(f,'WindowStyle','normal')
+            set(f,'Position',[1 1 881 692])
+            
+            % Colors
+            pyClr = [41 171 226]./255;
+            pdClr = [241 90 36]./255;
+              
+            angPd = -L.ang_pd + bodPd.ang(iFrame);
+            angPy = -L.ang_py + bodPy.ang(iFrame);
+            
+            % Use roi from previous frame
+            roiPd = giveROI('define','circular',400,iC.rPd,...
+                bodPd.x(iFrame),bodPd.y(iFrame));
+            roiPy = giveROI('define','circular',400,iC.rPy,...
+                bodPy.x(iFrame),bodPy.y(iFrame));
+            
+%             thd = linspace(0,2*pi,400);
+%             roiPd.x = (iC.rPd-1).*cos(thd)+iC.rPd+0.5;
+%             roiPd.y = (iC.rPd-1).*sin(thd)+iC.rPd+0.5;
+%             roiPy.x = (iC.rPy-1).*cos(thd)+iC.rPy+0.5;
+%             roiPy.y = (iC.rPy-1).*sin(thd)+iC.rPy+0.5;
+            
+            
+            
+            % Current rois                
+            imPd = giveROI('stabilized',im,roiPd,0,angPd);
+            imPy = giveROI('stabilized',im,roiPy,0,angPy);
+                 
+            % roi of pred in global frame
+            xGpd = roiPd.xPerimG;
+            yGpd = roiPd.yPerimG;
+            xCpd = [roiPd.xCntr roiPd.xCntr+iC.rPd*cosd(-angPd)];
+            yCpd = [roiPd.yCntr roiPd.yCntr+iC.rPd*sind(-angPd)];
+            
+            % roi of prey in global frame
+            xGpy = roiPy.xPerimG;
+            yGpy = roiPy.yPerimG;
+            xCpy = [roiPy.xCntr roiPy.xCntr+iC.rPy*cosd(-angPy)];
+            yCpy = [roiPy.yCntr roiPy.yCntr+iC.rPy*sind(-angPy)];
+            
+            % Plot tracking
+            h(1) = line(xGpd,yGpd,'Color',[pdClr 0.8],'LineWidth',2);
+            h(2) = line(xCpd,yCpd,'Color',[pdClr 0.8],'LineWidth',1);
+            h(3) = line(xGpy,yGpy,'Color',[pyClr 0.8],'LineWidth',1);
+            h(4) = line(xCpy,yCpy,'Color',[pyClr 0.8],'LineWidth',0.5);
+ 
+            subplot(4,2,[5 7])
+            imshow(imPd,'InitialMag','fit');
+            hold on
+            line(bodPd.x(iFrame),bodPd.y(iFrame),...
+                        'Color',[pdClr],'LineWidth',7);
+            line([iC.rPd 2*iC.rPd],[iC.rPd iC.rPd],...
+                        'Color',[pdClr 0.5],'LineWidth',2);      
+            hold off
+            
+            subplot(4,2,[6 8])
+            imshow(imPy,'InitialMag','fit');
+            hold on
+            line(bodPy.x(iFrame),bodPy.y(iFrame),...
+                        'Color',[pyClr],'LineWidth',7);
+            line([iC.rPy 2*iC.rPy],iC.rPy.*[1 1],...
+                        'Color',[pyClr 0.5],'LineWidth',2);
+            hold off
+            
         elseif strcmp(opType,'Pred + prey')
             
             set(f,'WindowStyle','normal')
@@ -284,13 +494,16 @@ if ~strcmp(opType,'blobs G&L')
         end
  
         
-        if nargout>0
+        %if nargout>0
             % Capture frame
-            M(idx) = getframe(gcf);
+           % M(idx) = getframe(gcf);
             
+            imFrame = getframe(gcf);
             % Advance index
-            idx = idx + 1;
-        end
+            %idx = idx + 1;
+            
+            writeVideo(vOut,imFrame);
+        %end
         
         if imVis
             pause(0.001);
@@ -301,6 +514,8 @@ if ~strcmp(opType,'blobs G&L')
         hold off
     end
 end
+
+
 
 %% loop thru frames ('blobs G&L')
 
@@ -357,7 +572,10 @@ end
 close(f)
 
 % Output
-varargout{1} = M;
+%varargout{1} = M;
+varargout{1} = [];
+
+close(vOut)
 
 
 % function visTrack(im,x,y,r,theta,tform,t_txt)

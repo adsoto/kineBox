@@ -72,6 +72,21 @@ elseif strcmp(action,'ellipse')
         bLevel = 0;
     end
     
+elseif strcmp(action,'rectangle')
+    
+    % Max num of pts
+    n = 4;
+    
+    
+    rX = [];
+    rY = [];
+    
+    if nargin > 2
+        bLevel = varargin{1};
+    else
+        bLevel = 0;
+    end
+    
 elseif strcmp(action,'threshold')
     
     if nargin > 2
@@ -143,7 +158,25 @@ elseif strcmp(action,'ellipse')
     B{i}.key = 3;
     B{i}.dostr = ['if length(xPos)==1;xPos=[];yPos=[]; '...
                   'else; xPos = xPos(1:end-1);yPos = yPos(1:end-1);end'];
-    B{i}.info = 'Right click: delete last point';        
+    B{i}.info = 'Right click: delete last point';  
+    
+% Rectangle mode
+elseif strcmp(action,'rectangle')
+    
+    disp('Select corners of rectangle')
+    
+    % Left click
+    i = i + 1;
+    B{i}.key = 1;
+    B{i}.dostr = 'idx=min([n length(xPos)+1]);xPos(idx,1)=x; yPos(idx,1)=y;';
+    B{i}.info = 'Left click: select point';  
+
+    % Right click
+    i = i + 1;
+    B{i}.key = 3;
+    B{i}.dostr = ['if length(xPos)==1;xPos=[];yPos=[]; '...
+                  'else; xPos = xPos(1:end-1);yPos = yPos(1:end-1);end'];
+    B{i}.info = 'Right click: delete last point';  
 
 % Threshold mode
 elseif strcmp(action,'threshold')
@@ -376,39 +409,21 @@ while true
             h = plot(xCirc,yCirc,'g-');
             
         end
+ 
+     % Rectangle mode
+    elseif strcmp(action,'rectangle')
+
+        if length(xPos)<2
+            h = plot(xPos,yPos,'g+');
             
-%         elseif length(xPos)==3
-%             
-%             % Radial positions
-%             theta = linspace(-pi/2,pi/2,200);
-%             
-%             radY =  range(yPos)/2;
-%             radX =  range(xPos);
-%             
-%             % Define circle
-%             xCirc = radX.*cos(theta) + mean([xPos(1) xPos(3)]);
-%             yCirc = radY.*sin(theta) + mean(yPos);
-%             
-%             % Define circle
-%             xCirc = r.*cos(theta)+xPos(1);
-%             yCirc = r.*sin(theta)+mean(yPos);
-%             
-%             h = plot(xCirc,yCirc,'g-');
-%             
-%         elseif length(xPos)>3
-%             
-%             % Radial positions
-%             theta = linspace(0,2*pi,200);
-%             
-%             radY =  range(yPos);
-%             radX =  range(xPos);
-%             
-%             % Define circle
-%             xCirc = radX.*cos(theta) + mean(xPos(1));
-%             yCirc = radY.*sin(theta) + mean(yPos);
-%             
-%             h = plot(xCirc,yCirc,'g-');    
-%         end
+        elseif length(xPos)==4
+            h = plot([xPos; xPos(1)],[yPos; yPos(1)],'g-');
+            
+        else
+  
+            h = plot(xPos,yPos,'g-');
+            
+        end
         
     end
 
@@ -506,9 +521,13 @@ elseif strcmp(action,'threshold and selection')
     varargout{2} = xPos;
     varargout{3} = yPos;
     
-elseif strcmp(action,'points') || strcmp(action,'point advance')  
+elseif strcmp(action,'points') || strcmp(action,'point advance') 
     varargout{1} = xPos;
     varargout{2} = yPos;
+    
+elseif strcmp(action,'rectangle')
+    varargout{1} = [xPos; xPos(1)];
+    varargout{2} = [yPos; yPos(1)];
     
 elseif strcmp(action,'radius')
     varargout{1} = r;

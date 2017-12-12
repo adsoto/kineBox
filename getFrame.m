@@ -65,7 +65,15 @@ else
   
     % Adjust items to new 'v'
     v = VideoReader(vid_path);
-    v.CurrentTime = fr_num./v.FrameRate;
+    
+    % Set current time to last frame
+    if fr_num/v.FrameRate==v.Duration
+        v.CurrentTime = (fr_num-1)./v.FrameRate;
+        
+    % Set current time to other frame
+    else
+        v.CurrentTime = fr_num./v.FrameRate;
+    end
     
      % Read next available frame
     im = readFrame(v);

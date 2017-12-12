@@ -82,6 +82,19 @@ elseif strcmp(action,'stabilized')
         imMean  = [];
     end
     
+elseif strcmp(action,'tform stabilized')
+    
+    im      = varargin{1};
+    roi     = varargin{2};
+    dSample = varargin{3};
+    tform   = varargin{4};
+    
+    if nargin > 5
+        imMean  = varargin{5};
+    else
+        imMean  = [];
+    end
+       
 else
     error('Do not recognize action')
 end
@@ -156,6 +169,16 @@ if ~strcmp(action,'define')
          roi.rect(2)+roi.rect(4)+1 roi.rect(2)+roi.rect(4)+1 ...
          roi.rect(2)]);
     
+    % Translate image (for tform stabilized mode)
+    if strcmp(action,'tform stabilized')
+        
+        % Get angular rotation from tform
+        %tformInv = invert(tform);
+        
+        % Translate image
+        im = imtranslate(im,tform.T(3,1:2));
+    end
+     
     % Crop image
     im_roi  = imcrop(im,roi.rect);
     
@@ -230,6 +253,24 @@ if ~strcmp(action,'define')
         
         % Deliver imStable
         im_roi = imStable;
+        
+    elseif strcmp(action,'tform stabilized')
+        
+
+        
+        rot_ang  = atan2(tform.T(2,1),tform.T(1,1))*180/pi;
+        
+        
+        imStable = imrotate(im_roi,rot_ang,'bilinear','crop');
+        
+
+        % White out beyond roi
+        imStable(~bw_roi_mask) = 255;
+        
+        % Deliver imStable
+        im_roi = imStable;
+        
+        
     end
 end
 
