@@ -94,6 +94,14 @@ elseif strcmp(action,'threshold')
     else
         bLevel = 0;
     end
+      
+elseif strcmp(action,'hue & value')
+    
+    if nargin > 2
+        bLevel = varargin{1};
+    else
+        bLevel = 0;
+    end
 
 end
 
@@ -193,6 +201,21 @@ elseif strcmp(action,'threshold')
     B{i}.dostr = 'tVal = max([tVal-0.02 0]);';
     B{i}.info = 'Down arrow: decrease threshold';
     
+% Hue mode
+elseif strcmp(action,'hue & value')
+ 
+    % Up arrow
+    i = i + 1;
+    B{i}.key = 30;
+    B{i}.dostr = 'huePercent = huePercent+0.005;';
+    B{i}.info  = 'Up arrow: increase hue range';
+    
+    % Down arrow
+    i = i + 1;
+    B{i}.key = 31;
+    B{i}.dostr = 'huePercent = huePercent-0.005;';
+    B{i}.info  = 'Down arrow: decrease hue range';
+    
 % Threshold and selection mode
 elseif strcmp(action,'threshold and selection')
  
@@ -280,8 +303,8 @@ areaMean = nan;
 tVal = graythresh(im);
 xPos = [];
 yPos = [];
-r = round(min(size(im))/4);
-rInc = round(min(size(im))/50);
+r = round(size(im,1)/4);
+rInc = round(size(im,1)/50);
 
 if strcmp(action,'radius') || strcmp(action,'ellipse')
     
@@ -302,6 +325,11 @@ if strcmp(action,'area')
     if nargin > 2
         tVal = varargin{1};
     end
+end
+
+% Hue mode
+if strcmp(action,'hue & value')
+    huePercent = 0.05;
 end
 
 % Overwrite area, if provided in threshold mode
@@ -340,6 +368,18 @@ while true
         % Make a truecolor all-green image, make non-blobs invisible
         green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
         h = imshow(green,'InitialMag','fit');
+        %brighten(bLevel)
+        set(h, 'AlphaData', bw)
+        
+    % Hue mode
+    elseif strcmp(action,'hue & value')
+        
+        % Overlay blobs
+        [props,bw,areas,xB,yB] = findBlobs(im,tVal,'hue',huePercent);
+        
+        % Make a truecolor all-green image, make non-blobs invisible
+        red = cat(3, ones(size(im)), zeros(size(im)), zeros(size(im)));
+        h = imshow(red,'InitialMag','fit');
         %brighten(bLevel)
         set(h, 'AlphaData', bw)
 
@@ -431,6 +471,10 @@ while true
     if strcmp(action,'threshold')
         title(['threshold = ' num2str(round(tVal*255),'%4.0f')])
         
+    % Hue mode
+    elseif strcmp(action,'hue & value')
+        title(['hue range = ' num2str(2*huePercent,'%4.0f')])
+        
     % Tile: area mode    
     elseif strcmp(action,'area')
         title(['A_m_i_n = ' num2str(round(areaMin),'%4.0f') ...
@@ -511,6 +555,10 @@ end
 % Threshold mode
 if strcmp(action,'threshold')
     varargout{1} = tVal;
+    
+% Hue mode
+elseif strcmp(action,'hue & value')
+        varargout{1} = huePercent;  
     
 elseif strcmp(action,'area')
     varargout{1} = areaMin;

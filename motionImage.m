@@ -34,7 +34,9 @@ function varargout = motionImage(vid_path,v,imType,varargin)
 %% Process inputs
 
 % imType
-if strcmp(imType,'mean') || strcmp(imType,'mean bright')
+if strcmp(imType,'mean') || ...
+   strcmp(imType,'mean bright') || ...
+   strcmp(imType,'mean color')
     
     % Image processing
     imProcess = varargin{1};
@@ -157,18 +159,6 @@ else
     imCurr = getFrame(vid_path,v,fr_num(1),imInvert,'gray');  
 end
 
-% % Get roi image
-% if strcmp(imType,'mean roi')
-%     imCurr = giveROI('stabilized',imCurr,S.roi(1),0,S.tform(:,:,1));
-% end
-% 
-% % Initialize mean image
-% if strcmp(imType,'mean') || strcmp(imType,'mean roi') || strcmp(imType,'im static')
-%     
-%     %imSum = zeros(size(imCurr));
-%  
-% end
-
 clear imCurr 
 
 
@@ -190,8 +180,14 @@ for i = 1:length(fr_num)
         imCurr = getFrame(vid_path,v,cFrame,imInvert,'gray');    
         
     elseif strcmp(imType,'mean') || strcmp(imType,'mean bright')
+           
         % Get current frame
-        imCurr       = getFrame(vid_path,v,cFrame,imInvert,'gray');       
+        imCurr       = getFrame(vid_path,v,cFrame,imInvert,'gray');   
+        
+    elseif strcmp(imType,'mean color')
+        
+        % Get current frame
+        imCurr       = getFrame(vid_path,v,cFrame,imInvert,'rgb');  
     
     elseif strcmp(imType,'mean roi') 
         % Get current frame
@@ -223,6 +219,13 @@ for i = 1:length(fr_num)
         %imSum  = imSum + double(imCurr);    
         imStack(:,:,i) = double(imCurr);   
            
+        
+    elseif strcmp(imType,'mean color')
+        
+        imStack.R(:,:,i) = imCurr(:,:,1);
+        imStack.G(:,:,i) = imCurr(:,:,2);
+        imStack.B(:,:,i) = imCurr(:,:,3);       
+        
     elseif strcmp(imType,'bw static') 
         
         % Loop thru blobs
@@ -251,10 +254,17 @@ for i = 1:length(fr_num)
 end
 
 % Calculate mean image(s)
-if strcmp(imType,'mean') || strcmp(imType,'mean roi') 
+if strcmp(imType,'mean') || ...
+   strcmp(imType,'mean roi')
     
     imOut = uint8(round(mean(imStack,3)));
-
+    
+elseif strcmp(imType,'mean color')
+    
+    imOut(:,:,1) = uint8(round(mean(imStack.R,3)));
+    imOut(:,:,2) = uint8(round(mean(imStack.G,3)));
+    imOut(:,:,3) = uint8(round(mean(imStack.B,3)));
+    
 elseif strcmp(imType,'mean bright')
     
     imOut = uint8(round(quantile(imStack,0.9,3)));

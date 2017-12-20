@@ -1,4 +1,4 @@
-function varargout = findBlobs(im,tVal,bMode,varargin)
+function varargout = findBlobs(im,imMean,propDiff,bMode,varargin)
 % Finds blobs defined by threshold and either area bounds or coordinates
 %
 % bMode = 'area' : findBlobs(im,tVal,bMode,areaMin,areaMax)
@@ -16,38 +16,55 @@ function varargout = findBlobs(im,tVal,bMode,varargin)
 if strcmp(bMode,'area')
     areaMin = varargin{1};
     areaMax = varargin{2};
-
+    
 elseif strcmp(bMode,'coord advanced')
     x        = varargin{1};
-    y        = varargin{2};
-    if nargin<5
-        areaLast = varargin{3};
-    else
-        areaLast = [];
-    end
-    
-    if nargin >6
-        specialAction = varargin{4};
-    else
-        specialAction = [];
-    end
-    
-elseif strcmp(bMode,'advanced comparison')
-    
-    x        = varargin{1};
-    y        = varargin{2};
+    y        = varargin{2};    
     
     if length(varargin) > 2
-        propLast = varargin{3};
+        specialAction = varargin{3};
     else
-        propLast = [];
+        specialAction = [];
     end
     
     if length(varargin) > 3
-        specialAction = varargin{4};
+        minArea = varargin{4};
+    else
+        minArea = 0;
+    end
+    
+    if length(varargin) > 4
+        maxArea = varargin{5};
+    else
+        maxArea = inf;
+    end   
+    
+elseif strcmp(bMode,'advanced comparison')    
+
+     % Initial blob
+    prop0 = varargin{1};
+    
+    % Last blob
+    propLast = varargin{2};
+
+    % Special action
+    if length(varargin) > 2
+        specialAction = varargin{3};
     else
         specialAction = [];
     end
+    
+     % areaFactor - proportional range in area wrt last blob
+    if length(varargin) > 3
+        areaFactor = varargin{4};
+    else
+        areaFactor = 0.5;
+    end
+    
+    % Previous position
+    x = propLast.Centroid(1);
+    y = propLast.Centroid(2);
+    
     
 elseif strcmp(bMode,'area and circ')
     
@@ -59,7 +76,20 @@ elseif strcmp(bMode,'coord')
     x = varargin{1};
     y = varargin{2};
     
+elseif strcmp(bMode,'all')
     
+    if length(varargin)>0
+        areaMin = varargin{1};
+    else
+        areaMin = 0;
+    end
+    
+    if length(varargin)>1
+        areaMax = varargin{2};
+    else
+        areaMax = inf;
+    end
+       
 else
     error('bMode not recognized');
 end
@@ -67,19 +97,26 @@ end
 
 %% Make binary image
 
-if strcmp(bMode,'advanced comparison')
+% If color image . . .
+if size(im,3)==3
+    % Convert images to HSV
+    H      = rgb2hsv(im);
+    Hmean  = rgb2hsv(imMean);
     
-    % Make binary with darkest pixels
-    tVals = multithresh(im,3);
-    bw = ~(im<tVals(2));
-     
+    % Make binary, based on differences from mean image in hue and value
+    bw = ( H(:,:,1)>(1+propDiff*2)*Hmean(:,:,1)) ...
+        | (H(:,:,1)< (1-propDiff*2) * Hmean(:,:,1)) ...
+        & H(:,:,3)<(0.99)*Hmean(:,:,3);
+    
+% If grayscale . . .
 else
-    % Make binary
-    bw = im2bw(im,tVal);
+    bw = im < (1-propDiff)*imMean;
 end
 
+clear H Hmean
+
 % Fill holes
-bw = imfill(~bw,'holes');
+bw = imfill(bw,'holes');
 
 % Start with black image
 bwOut = bw.*0~=0;
@@ -139,6 +176,40 @@ if strcmp(bMode,'area') || strcmp(bMode,'area and circ')
         propOut = [];
     end
     
+elseif strcmp(bMode,'all')
+    
+    % Survey blobs
+    props = regionprops(bw,'Centroid','Area',...
+        'MajorAxisLength','MinorAxisLength',...
+        'PixelIdxList','PixelList');
+      
+    j = 1;
+    for i = 1:length(props)
+        if (props(i).Area > areaMin) && ...
+                (props(i).Area < areaMax)
+            
+            propOut(j,1) = props(i);
+            j = j + 1;
+        end
+    end
+    
+    if j == 1
+        propOut = [];
+    else
+        propOut = props;
+        
+        % Add to area
+        areas = propOut.Area;
+        
+        for j = 1:length(propOut)
+            % Add white pixels for current blob
+            bwOut(propOut(j).PixelIdxList) = 1;
+        end
+    end
+    
+    
+    
+    
 elseif strcmp(bMode,'coord')
     
     bw = bwselect(bw,x,y);
@@ -156,8 +227,7 @@ elseif strcmp(bMode,'coord')
     areas = propOut.Area;
             
     % Add white pixels for current blob
-    bwOut(propOut.PixelIdxList) = 1;
-    
+    bwOut(propOut.PixelIdxList) = 1;    
     
 elseif strcmp(bMode,'coord advanced')
     
@@ -182,7 +252,7 @@ elseif strcmp(bMode,'coord advanced')
     % Survey blobs
     propOut = regionprops(bwS,'Centroid','Area',...
         'MajorAxisLength','MinorAxisLength',...
-        'PixelIdxList','PixelList','Eccentricity','Perimeter');
+        'PixelIdxList','PixelList');
     
     % If that fails, decide among blobs
     if isempty(propOut)
@@ -190,12 +260,15 @@ elseif strcmp(bMode,'coord advanced')
         % Survey blobs
         props = regionprops(bw,'Centroid','Area',...
             'MajorAxisLength','MinorAxisLength',...
-            'PixelIdxList','PixelList','Eccentricity','Perimeter');
+            'PixelIdxList','PixelList');
         
         minDist = inf;
         
         if isempty(props)
             error('Lost blob -- maybe try different treshold or roi radius')
+          
+        elseif length(props)==1
+            propOut = props;
             
         elseif length(props)>1 
             for i = 1:length(props)
@@ -203,10 +276,9 @@ elseif strcmp(bMode,'coord advanced')
                 % Distance of current blob from last
                 currDist = hypot(x-props(i).Centroid(1),y-props(i).Centroid(2));
                 
-                if ~isempty(areaLast) && ...
-                        (props(i).Area > areaLast/2) && ...
+                if (props(i).Area > minArea) && ...
                         (currDist < minDist)  && ...
-                        (props(i).Area < areaLast*2)
+                        (props(i).Area < maxArea)
                     
                     minDist = currDist;
                     propOut = props(i);
@@ -258,46 +330,57 @@ elseif strcmp(bMode,'advanced comparison')
     % Survey blobs
     props = regionprops(bw,'Centroid','Area',...
         'MajorAxisLength','MinorAxisLength',...
-        'PixelIdxList','PixelList','Eccentricity','Perimeter');
-    
-    minDist = inf;
-    
+        'PixelIdxList','PixelList');
+
     if isempty(props)
-        error('Lost blob -- maybe try different treshold or roi radius')
+        warning('Lost blob');
+        propOut = nan;
+        
+    elseif length(props)==1
+        propOut = props;
         
     elseif length(props)>1 
         
+        % Initialize index
+        k = 1;
+        
+        % Loop thru blobs
         for j = 1:length(props)
             
-            % Change in properties
-            dArea   = abs(props(j).Area-propLast.Area);
-            %dEcc    = abs(props(j).Eccentricity - propLast.Eccentricity);
-            %dPerim  = abs(props(j).Perimeter - propLast.Perimeter);
-            dCenter = hypot(x-props(j).Centroid(1),y-props(j).Centroid(2));
-            
-            % Match metric
-%             diffMetric(j,1) = sqrt(dArea)./sqrt(propLast.Area) * ...
-%                 dEcc./propLast.Eccentricity * ...
-%                 dPerim./propLast.Perimeter * ...
-%                 dCenter/length(bw);
-             diffMetric(j,1) = sqrt(dArea)./sqrt(propLast.Area) * ...
-                dCenter/length(bw);
+            % Include only those within area range
+            if props(j).Area > prop0.Area*areaFactor && ...
+               props(j).Area < prop0.Area*(1/areaFactor)
+           
+                % Distance from last
+                dCenter(k) = hypot(x-props(j).Centroid(1),y-props(j).Centroid(2));
+                
+                % Store blob
+                props2(k) = props(j);
+                
+                k = k + 1;
+            end
         end
         
-        % Forward only the best blob
-        iBest = find(diffMetric==min(diffMetric),1,'first');
-        propOut = props(iBest);
-        
-    else
-        propOut = props;
-    end
-    
-
-    % Add to area
-    areas = propOut.Area;
+        % If blobs passed area filter, choose closest from last
+        if k > 1
             
-    % Add white pixels for current blob
-    bwOut(propOut.PixelIdxList) = 1;    
+            % Best is closest
+            iBest = find(dCenter==min(dCenter),1,'first');
+            
+            % Advance best
+            propOut = props2(iBest);
+        
+        % If no blobs passed filter, advance nan
+        else
+            propOut = nan;
+            
+        end
+    end
+
+    if isstruct(propOut)
+        % Add white pixels for current blob
+        bwOut(propOut.PixelIdxList) = 1;
+    end
     
 end
 

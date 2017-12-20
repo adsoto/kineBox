@@ -1,4 +1,4 @@
-function varargout = trackBody(vid_path,v,currDataPath,currDataFile,method,varargin)
+function varargout = trackBody(vid_path,v,currDataPath,method,varargin)
 % Tracks the motion of an object in a video sequence
 % tracker(vid_path,v,method)
 %   vid_path - path to video file or image sequence
@@ -44,6 +44,8 @@ saveInterval = 50;
 % Maximum size of an image dimension (for downsampling)
 maxSize = 250;
 
+currDataFile = 'Body.mat';
+
 
 %% Load/create data files
 
@@ -71,6 +73,11 @@ iminvert = iC.invert;
 % Transfer mask
 xMask = iC.xTank;
 yMask = iC.yTank;
+
+
+
+% Interval btwn analyzed frames
+anaInterval = iC.frInterval;
 
 
 %% Parse inputs
@@ -112,6 +119,94 @@ if strcmp(method,'course')
     % Number of points to define roi
     numroipts = 400;
 
+elseif strcmp(method,'centers') 
+
+    % Mean image
+    if length(varargin)<1 
+        imMean = [];
+    else
+        imMean = varargin{1};
+    end
+    
+    if length(varargin)>1
+        anaInterval = varargin{2};
+    else
+        % Interval btwn analyzed frames
+        anaInterval = 1;
+    end
+    
+%     if length(varargin)>2
+%         x0 = varargin{3};
+%         y0 = varargin{4};
+%         r = varargin{5};
+%     else
+%         x0 = iC.x;
+%         y0 = iC.y;
+%         r = iC.r;
+%     end
+
+    if length(varargin)>2
+        iMode = varargin{3};
+    else
+        % Interval btwn analyzed frames
+        iMode = 1;
+    end
+    
+    if length(varargin)>3
+        visSteps = varargin{2};
+    else
+        visSteps = 0;
+    end    
+    
+    specialAction = 'none';
+    
+    firstInterval = anaInterval; 
+    
+    % Number of points to define roi
+    numroipts = 400;
+    
+    propDiff = 0.02;
+    
+    %visSteps = 1;
+    
+    clrMode = 'gray';
+    %clrMode = 'rgb';
+    
+
+elseif strcmp(method,'rotation') 
+
+    % Mean image
+    if length(varargin)<1 || iC.useMean==0
+        imMean = [];
+    else
+        imMean = varargin{1};
+    end
+    
+    if length(varargin)>1
+        anaInterval = varargin{2};
+    else
+        % Interval btwn analyzed frames
+        anaInterval = 1;
+    end
+    
+    if length(varargin)>5
+        visSteps = varargin{6};
+    else
+        visSteps = 0;
+    end    
+    
+    specialAction = 'none';
+    
+    firstInterval = anaInterval; 
+    
+    % Number of points to define roi
+    numroipts = 400;
+    
+    propDiff = 0.02;
+    
+    clrMode = 'gray';
+    
+    
 elseif strcmp(method,'refined') 
 
     % Mean image
@@ -166,12 +261,7 @@ elseif strcmp(method,'arms')
     % Course body data
     courseBod = varargin{2};
 
-    if length(varargin)>2
-        anaInterval = varargin{3};
-    else
-        % Interval btwn analyzed frames
-        anaInterval = 1;
-    end
+
     
     if length(varargin)>3
         specialAction = varargin{4};
@@ -203,16 +293,62 @@ else
     
 end
 
-% Find first frame to be analyzed
-iFrames = 1:anaInterval:length(Body.frames);
-cFrames = Body.frames(iFrames);
-cXs = Body.x(iFrames);
+% Convert mean image to gray for grayscale mode
+if strcmp(clrMode,'gray') && size(imMean,3)==3;
+    imMean = rgb2gray(imMean);
+end
 
-firstFrame =  cFrames(find(~isnan(cXs),1,'last'));
-iFirst = find(Body.frames == firstFrame,1,'first');
-idx = iFirst + firstInterval;
 
-clear iFrames cFrames cXs firstFrame iFirst firstInterval
+%% Determine frames to analyze
+
+   
+% If there are manually-tracked segments . . .
+if ~isnan(iC.manStart(1))
+    
+    % Start index
+    iStart = 1;
+    
+    % Set default logic
+    ana.auto = zeros(length(Body.frames),1);
+    
+    % Loop thru manual segments
+    for i = 1:length(iC.manStart)
+        
+        % Index of end frame
+        iEnd = find(Body.frames==iC.manStart(i),1,'first') - anaInterval;
+        
+        % Indicies of segment
+        idx = iStart:anaInterval:iEnd;
+        
+        % Designate segment to analyze
+        ana.auto(idx) = 1;
+        
+        % New start index
+        iStart = iC.manEnd(i) + anaInterval;
+    end
+    
+    % Tack on end of automated portion
+    iEnd = length(Body.frames);
+    idx = iStart:anaInterval:iEnd;
+    ana.auto(idx) = 1;
+    
+    clear idx iStart iEnd
+else
+    
+    % Analyze all possible frames
+    ana.auto = ones(length(Body.frames),1);
+    
+end
+
+if strcmp(method,'centers')
+    
+    % Indices of non-nan values included in analysis
+    idx = ~isnan(Body.x(:,iMode)) & ana.auto;
+    
+    % Current frame
+    cFrame = Body.frames(idx);
+    
+end
 
 % Downsmampling used only for image registartion
 dSample = 0;
@@ -222,37 +358,38 @@ clear iC
 
 %% Smooth data
 
-if strcmp(method,'refined') || strcmp(method,'arms') 
-    iFrames = ~isnan(courseBod.x);
-    cBod.frames  = courseBod.frames(iFrames);
-    cBod.x       = smooth(courseBod.x(iFrames));
-    cBod.y       = smooth(courseBod.y(iFrames));
-    cBod.ang = smooth(courseBod.ang(iFrames));
-    
-    clear courseBod iFrames
-end
+% if strcmp(method,'refined') || strcmp(method,'arms') 
+%     iFrames = ~isnan(courseBod.x);
+%     cBod.frames  = courseBod.frames(iFrames);
+%     cBod.x       = smooth(courseBod.x(iFrames));
+%     cBod.y       = smooth(courseBod.y(iFrames));
+%     cBod.ang = smooth(courseBod.ang(iFrames));
+%     
+%     clear courseBod iFrames
+% end
 
 
 %% Parameter defaults
     
-% Initialize image registration parameters
-[optimizer, metric]  = imregconfig('monomodal');
-% optimizer.MaximumStepLength = 5e-4;
-% optimizer.MaximumIterations = 1500;
-% optimizer.RelaxationFactor  = 0.2;
-optimizer.MaximumStepLength = 10e-4;
-optimizer.MaximumIterations = 5000;
-optimizer.RelaxationFactor  = 0.8;
+if strcmp(method,'rotation')
+    % Initialize image registration parameters
+    [optimizer, metric]  = imregconfig('monomodal');
+    optimizer.MaximumStepLength = 5e-4;
+    optimizer.MaximumIterations = 1500;
+    optimizer.RelaxationFactor  = 0.2;
+    % optimizer.MaximumStepLength = 10e-4;
+    % optimizer.MaximumIterations = 5000;
+    % optimizer.RelaxationFactor  = 0.8;
+end
 
 
 % First image
-im0 = getFrame(vid_path,v,Body.frames(1),iminvert,'gray',imMean);
+im0 = getFrame(vid_path,v,cFrame,iminvert,clrMode);
 
-% Make binary mask of tank region
-bwMask = roipoly(im0,xMask,yMask);
+%x0 = ana(currSeg).
 
-% Eliminate outside of roi
-im0(~bwMask) = 255;
+% Apply mask
+im0 = applyMask(im0,xMask,yMask);
 
 % Current roi
 roi = giveROI('define','circular',numroipts,r,x0,y0);
@@ -274,6 +411,26 @@ if strcmp(method,'arms')
     
     % Crop translated reference image
     im_roi0 = giveROI('unstabilized',im0,roi,dSample);
+    
+elseif strcmp(method,'centers')
+    
+    iFrame = find(Body.frames==cFrame,1,'first');
+    
+end
+
+if 1 %strcmp(method,'centers') && ~isfield(Body,'props')
+        
+    % Find blob at cX,cY
+    [props,bwOut] = findBlobs(im0,imMean,propDiff,'coord advanced',x0,y0);
+       
+    if isstruct(props)
+        % Log starting blob
+        Body.props(1).Centroid    = props.Centroid;
+        Body.props(1).PixelList   = props.PixelList;
+        Body.props(1).Area        = props.Area;
+    else
+        error('Blob not found on first frame')
+    end
 end
 
 
@@ -294,29 +451,12 @@ while true
     cFrame = Body.frames(idx);    
     
     % Current image
-    im = getFrame(vid_path,v,cFrame,iminvert,'gray',imMean);
+    im = getFrame(vid_path,v,cFrame,iminvert,clrMode);
   
-    % Eliminate outside of mask
-    if ~isempty(xMask)
-        
-        % Make binary mask of tank region
-        bwTank = roipoly(im,xMask,yMask);
-        
-        % Apply mask
-        im(~bwTank) = 255;
-        
-        % Make binary mask of tank region
-        bwMask = roipoly(im,xMask,yMask);
-        
-        % Eliminate outside of mask
-        im(~bwMask) = 255;
-        
-        clear bwTank
-    end
-       
-    
-    
-%     % If masking . . .
+    % Apply mask
+    im = applyMask(im,xMask,yMask);
+
+%     % If masking pred from prey. . .
 %     if strcmp(method,'advanced rotation with mask')
 %         im_roi = addmask(im_roi);
 %         
@@ -407,6 +547,24 @@ while true
         Body.y(idx)        = Body.y(idx-anaInterval) + Dy;
         Body.tform{idx}    = tform;
         
+    % CENTER TRACKING ------------------------
+    elseif strcmp(method,'centers')
+        
+        % Find blob at cX,cY
+        [props,bwOut] = findBlobs(im,imMean,propDiff,'advanced comparison',...
+            Body.props(1),Body.props(idx-anaInterval),specialAction,0.5);
+        
+        if isstruct(props)
+            Body.props(idx).Centroid    = props.Centroid;
+            Body.props(idx).PixelList   = props.PixelList;
+            Body.props(idx).Area        = props.Area;
+        else
+            Body.props(idx).Centroid  = [nan nan];
+            Body.props(idx).PixelList = [nan nan];
+            Body.props(idx).Area      = nan;
+        end
+        
+        clear props
         
     % REFINED TRACKING ------------------------
     elseif strcmp(method,'refined')
@@ -626,26 +784,55 @@ while true
     % Visualize rotation, for debugging 
     if visSteps
         
-        % Use roi from current frame
-        roiCurr = giveROI('define','circular',numroipts,r,Body.x(idx),Body.y(idx));
-        
-        %imStable = giveROI('stabilized',im,roi,dSample,tform);
-        imStable =  giveROI('stabilized',im,roiCurr,dSample,Body.ang(idx));
-        theta = linspace(0,2*pi,400);
-        
-        includeRot = 1;
-        
         % Title text
         t_txt = ['Frame ' num2str(Body.frames(idx))];
+        
+        if strcmp(method,'centers') 
             
-        % If rotation data included . . .
-        if includeRot
+            % Start with black image
+            bw2 = ~bwOut;
+            
+            props2 = regionprops(~bwOut,'PixelList');
+            
+            if strcmp(clrMode,'rgb')
+                im2 = applyMask(im,Body.props(idx).PixelList(:,1),...
+                    Body.props(idx).PixelList(:,2),[255 255 255],1);
+                
+                imshow(im2,'InitialMag','fit')
+            else
+                imshow(im,'InitialMag','fit')
+                hold on
+                % Make a truecolor all-green image, make non-blobs invisible
+                green = cat(3, zeros(size(im)), ones(size(im)), zeros(size(im)));
+                h = imshow(green,'InitialMag','fit');
+                %brighten(bLevel)
+                set(h, 'AlphaData', ~bw2)
+                
+            end
+            
+            title(t_txt)
+            
+            
+        else
+            
+            % Use roi from current frame
+            roiCurr = giveROI('define','circular',numroipts,r,Body.x(idx),Body.y(idx));
+            
+            %imStable = giveROI('stabilized',im,roi,dSample,tform);
+            imStable =  giveROI('stabilized',im,roiCurr,dSample,Body.ang(idx));
+            theta = linspace(0,2*pi,400);
+            
+            includeRot = 1;
+            
+            
+            
+            % If rotation data included . . .
             
             warning off
             
             subplot(2,2,1)
             imshow(im,'InitialMag','fit')
-           % brighten(-0.7)
+            % brighten(-0.7)
             hold on
             %plot(Centroid.x(i),Centroid.y(i),'g+',xMask,yMask,'k-')
             line(roiCurr.xPerimG,roiCurr.yPerimG,'Color',[1 0 0 0.2],'LineWidth',3);
@@ -657,7 +844,7 @@ while true
             hold on
             %plot(roi.xPerimL,roi.yPerimL,'k-')
             line(roi.xPerimL,roi.yPerimL,'Color',[1 0 0 0.2],'LineWidth',3);
-            hold off        
+            hold off
             brighten(-0.7)
             
             subplot(2,2,3)
@@ -666,21 +853,14 @@ while true
                 title('Image comparison')
             end
             
-            
-%             subplot(2,2,4)
-%             %imshowpair(giveROI('stabilized',im,roi,dSample,tform),im_roi0)
-%             
-%             imshowpair(im_roi,imStable)
-%             title('After correction')
-            
-            
-%             visTrack(im,Centroid.x(i),Centroid.y(i),r,theta,...
-%                 Rotation(i).tform_roi,t_txt);
-            
-    warning on
-            % Pause briefly to render
-            pause(0.001)
+            warning on
         end
+        
+        
+        
+        % Pause briefly to render
+        pause(0.001)
+
     end
         
     % Visualize centroid, for debugging 
@@ -754,32 +934,32 @@ end
 
 
 
-
-function im = addmask(im)
-% Mask with distance map (trims fins)
-
-% Enhance contrast
-im1 = imadjust(im);
-
-% Binary image
-bw = im2bw(im1,graythresh(im1));
-
-% Distance map
-bwD = bwdist(bw);
-
-% Max distance
-maxDist = max(bwD(:));
-
-% Threshold distance
-threshDist = maxDist/3;
-
-% Refine binary as above-threshold images
-bw = bwD>threshDist;
-
-% Dilate, white out outside
-se = strel('disk',3,4);
-bw = imdilate(bw,se);
-im(~bw) = 255;
+% 
+% function im = addmask(im)
+% % Mask with distance map (trims fins)
+% 
+% % Enhance contrast
+% im1 = imadjust(im);
+% 
+% % Binary image
+% bw = im2bw(im1,graythresh(im1));
+% 
+% % Distance map
+% bwD = bwdist(bw);
+% 
+% % Max distance
+% maxDist = max(bwD(:));
+% 
+% % Threshold distance
+% threshDist = maxDist/3;
+% 
+% % Refine binary as above-threshold images
+% bw = bwD>threshDist;
+% 
+% % Dilate, white out outside
+% se = strel('disk',3,4);
+% bw = imdilate(bw,se);
+% im(~bw) = 255;
 
 function im = addsimplemask(im,tVal)
 % Adds a regular mask to image

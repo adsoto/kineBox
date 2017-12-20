@@ -1,7 +1,17 @@
 function initializeTracking(vid_path,v,currDataPath,method,varargin)
-% Creates data files for analysis by kineBox
 
-%TODO: Add pred-prey mode
+
+%% Parameters
+
+% Currently only support grayscale mode
+clrMode = 'gray';
+
+% Predator & prey colors
+pyClr = [41 171 226]./255;
+pdClr = [241 90 36]./255;
+
+
+%% Create data files for analysis by kineBox
 
 % Check for path in data dir
 if isempty(dir(currDataPath))
@@ -9,92 +19,148 @@ if isempty(dir(currDataPath))
     mkdir(currDataPath);
 end
 
-%% Parse inputs
 
-% Mean image
-if length(varargin)>0
-    imMean = varargin{1};
-else
-    imMean = [];
-end
-
-% Image invert (default)
-if length(varargin)>1
-    imInvert = varargin{2};
-else
-    imInvert = 0;
-end
-
-% Image invert (default)
-if length(varargin)>1
-    imInvert = varargin{2};
-else
-    imInvert = 0;
-end
-
-
-%% Interactively select initial conditions
+%% Preliminary questions
 
 if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
     
-    % DURATION -------------------------------------
-    
-    % Get frame duration
-    iC = selectDuration(vid_path,v,imMean);
-    
-    answer = inputdlg({'Interval btwn frames for COURSE analysis',...
-                       'Interval btwn frames for FINE analysis'},'',1,{'10','1'});
-    
-    % Interval between tracked frames
-    iC.frIntervalCourse = str2num(answer{1});
-    iC.frIntervalFine   = str2num(answer{2});
-     
-    % First image
-    im = getFrame(vid_path,v,iC.startFrame,imInvert,'gray',imMean);
-    
-    % IMAGE PROPERTIES -------------------------------------
-    
-    % First image (No mean-image subtraction)
-    imNoMean = getFrame(vid_path,v,...
-                iC.startFrame,imInvert,'gray');
-    
-    figure;
-    subplot(1,2,1)
-    imshow(imNoMean); title('No mean-image subtraction')
-    subplot(1,2,2)
-    imshow(imadjust(im)); title('With mean-image subtraction')
-            
-    ButtonName = questdlg('Use mean-image subtraction?', ...
-        '','Yes', 'No', 'Cancel', 'Yes');
-    
-    if strcmp(ButtonName,'Yes')
-        iC.useMean = 1;
+     ButtonName = questdlg('Which kind of experiment?', ...
+                          '','Single body', 'Pred-prey', 'Cancel', 'Single body');
+                      
+    if strcmp(ButtonName,'Single body')
+        iC.expType = 'single';
         
-        % Brightness level (darkens images)
-        bLevel = -0.5;
-        
-    elseif strcmp(ButtonName,'No')
-        iC.useMean = 0;
-        
-        imMean = [];
-        
-        bLevel = 0;
-        
+    elseif strcmp(ButtonName,'Pred-prey')
+        iC.expType = 'pred prey';
     else
         return
     end
     
-    close
-    clear buttonName 
+    % Frame rate & interval for analysis
+    if isfield(v,'FrameRate')
+
+        iC.frameRate = v.FrameRate;
+        
+        answer = inputdlg({'Interval btwn frames for analysis (frames)'},'',1,{'1'});
+        
+        % Interval between tracked frames
+        iC.frInterval = str2num(answer{1});
+    else
+        answer = inputdlg({'Interval btwn frames for analysis (frames)',...
+                           'Frame rate (fps)'},'',1,{'1','29.97'});
+        
+        iC.frInterval  = str2num(answer{1});
+        iC.frameRate   = str2num(answer{2});
+    end 
     
+    % Manual analysis
+    bName = questdlg('Any intervals to analyze manually?', ...
+                          '','Yes', 'No', 'Cancel', 'Yes');
+                      
+    if strcmp(bName,'Cancel') || isempty(bName)
+        return
+        
+    elseif strcmp(bName,'Yes')
+        
+        % Get number of intervals
+        answer = inputdlg({'How many intervals?'},'',1,{'1'}); 
+        numInt = str2num(answer{1});
+        
+        % Loop thru intervals
+        for i = 1:numInt
+            
+            answer = inputdlg({'Start frame?','End frame'},...
+                              ['Interval ' num2str(i)],1,{'',''}); 
+            iC.manStart(i)  = str2num(answer{1});
+            iC.manEnd(i)    = str2num(answer{2});
+        end
+        
+    elseif strcmp(bName,'No')
+        
+        iC.manStart  = nan;
+        iC.manEnd    = nan;
+    end
     
-    imI = getFrame(vid_path,v,iC.startFrame,0,'gray',imMean);
+    clear bName answer
+end
+
+
+%% Choose movie duration
+
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
     
-    figure;
-    imshow(imI,'InitialMag','fit')
+    % Make figure
+    f = figure;
     
-    ButtonName = questdlg('Is the body dark or light?', ...
-        '','Dark', 'Light', 'Cancel', 'Dark');
+    % Default first and end frames
+    firstFrame = v.UserData.FirstFrame;
+    lastFrame  = v.UserData.LastFrame;
+    
+    % Loop for multiple tries at frame numbers
+    while true
+        
+        % Get images
+        im1 = getFrame(vid_path,v,firstFrame,0,'rgb');
+        im2 = getFrame(vid_path,v,lastFrame,0,'rgb');
+        
+        % Plot candidate frames
+        subplot(1,2,1)
+        imshow(im1,'InitialMag','fit')
+        title(['First frame (' num2str(firstFrame) ')'])
+        
+        subplot(1,2,2)
+        imshow(im2,'InitialMag','fit')
+        title(['Last frame (' num2str(lastFrame) ')'])
+        
+        % Ask for approval on frames
+        an = questdlg('Are these good starting and ending frames?','','Yes',...
+            'No','Cancel','Yes');
+        
+        if strcmp(an,'Yes')
+            
+            close(f)
+            break
+            
+        elseif strcmp(an,'No')
+            
+            prompt={'Start frame num:','Last frame num:'};
+            name='Choose clip duration';
+            numlines=1;
+            defaultanswer={num2str(firstFrame),num2str(lastFrame)};
+            
+            answer = inputdlg(prompt,name,numlines,defaultanswer);
+            
+            if isempty(answer)
+                return
+            end
+            
+            firstFrame   = str2num(answer{1});
+            lastFrame    = str2num(answer{2});
+            
+        else
+            return
+        end
+    end
+    
+    % Store start and end frames
+    iC.startFrame = firstFrame;
+    iC.endFrame   = lastFrame;
+
+    clear im1 im2 f prompt name numlines answer firstFrame lastFrame
+end
+
+
+%% Determine whether to invert image
+
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
+    
+    im = getFrame(vid_path,v,iC.startFrame,0,'gray');
+    
+    f = figure;
+    imshow(im,'InitialMag','fit')
+    
+    ButtonName = questdlg('Is the foreground body dark or light?', ...
+                          '','Dark', 'Light', 'Cancel', 'Dark');
     
     if strcmp(ButtonName,'Dark')
         iC.invert = 0;
@@ -106,16 +172,20 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         return
     end
     
-    clear buttonName imI
-    close
+    clear buttonName im
+    close(f)
     
+end
+
+
+%% Tank mask       
     
-       % First image (No mean-image subtraction)
-    imNoMean = getFrame(vid_path,v,...
-                iC.startFrame,iC.invert,'gray');
-       
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))  
+
+    im = getFrame(vid_path,v,iC.startFrame,iC.invert,'gray');
     
-    % MASKING -------------------------------------
+    f = figure;
+    imshow(im,'InitialMag','fit')
     
     ButtonName = questdlg('Were the experiments run in an arena?', ...
         '','Yes, elliptical', 'Yes, rectangular','No', 'Yes, elliptical');
@@ -126,7 +196,7 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         disp(' ')
         disp('Select elliptical boundaries of the tank')
         disp(' ')
-        [iC.xTank,iC.yTank] = imInteract(imNoMean,'ellipse');
+        [iC.xTank,iC.yTank] = imInteract(im,'ellipse');
     
     elseif strcmp(ButtonName,'Yes, rectangular')
         
@@ -136,7 +206,7 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         disp(' ')
         
         %TODO: Make this mode:
-        [iC.xTank,iC.yTank] = imInteract(imNoMean,'rectangle');
+        [iC.xTank,iC.yTank] = imInteract(im,'rectangle');
         
     elseif strcmp(ButtonName,'No')
         iC.xTank = [];
@@ -146,58 +216,145 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         return
     end
     
-    clear buttonName 
-    
-    % CALIBRATION -------------------------------------
+    close(f)
+    clear buttonName im
+end
 
-    figure;
-    imshow(imNoMean,'InitialMag','fit')
+
+%% Calculate mean image
+
+if isempty(dir([currDataPath filesep 'meanImageData.mat']))
     
-     ButtonName = questdlg('Are there calibration landmarks in view?', ...
-        '','Yes', 'No', 'Cancel', 'Yes');
+    % Calculate mean image
+    imMean = motionImage(vid_path,v,'mean bright','none',iC.invert);
     
-    if strcmp(ButtonName,'Yes')
+    if iC.invert==1
+        imMean = imcomplement(imMean);
+    end
+    
+    % Save mean image data
+    save([currDataPath filesep 'meanImageData'],'imMean');
+    
+else
+    % Load imMean
+    load([currDataPath filesep 'meanImageData.mat'])
+end
+    
+
+%% Determine contrast difference between blobs and mean image
+
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))    
+    
+    % Frames for plot
+    visFrames = round(linspace(iC.startFrame,iC.endFrame,9));
+    
+    % Make figure
+    f = figure;
+    
+    % Render 9 frames with current settings
+    for i = 1:9
+        % Get image, subtract around tank
+        im{i} = getFrame(vid_path,v,visFrames(i),iC.invert,'gray');
+        im{i} = applyMask(im{i},iC.xTank,iC.yTank);
         
-        % Calibration
+        subplot(3,3,i)
+        imshow(im{i},'InitialMag','fit')
+        title(['Frame ' num2str(visFrames(i))])
+    end
+    
+    % Index for run thru loop
+    runNum = 1;
+    
+    % Loop thru for each body
+    while true
+     
+        % Starting value
+        propDiff = 0.15;
+
         disp(' ')
-        disp('Select two points for spatial calibration')
-        [xCal,yCal] = imInteract(imNoMean,'points',2);
         
-        answer = inputdlg('Distance between 2 points (m)?','',1,{'0.5'});
-
-        iC.xCalPts   = xCal;
-        iC.yCalPts   = yCal;
-        iC.calconst = str2num(answer{1}) / hypot(diff(xCal),diff(yCal));
-        
-    elseif strcmp(ButtonName,'No')
-        iC.xCal = [];
-        iC.yCal = [];
-        
-    else
-        return
-    end
-    
-    clear buttonName xCal yCal answer
-    
-    
-    % FRAME RATE ----------------------------------------
-    
-    if isfield(v,'FrameRate')
-
-        iC.frameRate = v.FrameRate;
-    else
-        answer = inputdlg({'Frame rate (fps)'},'',1,{'29.97'});
-        
-        iC.frameRate = str2num(answer{1});
-    end
-    
-    clear answer
+        if strcmp(iC.expType,'pred prey') && runNum==1
+            disp('PREDATOR ----------------------------') 
+            clr = pdClr;
             
-    
-    % SELECT ANIMAL POSITION ------------------------------
+        elseif strcmp(iC.expType,'pred prey')
+            disp('PREY --------------------------------')      
+            clr = pyClr;
+            
+        else
+            clr = [0 1 0];
+        end
+        
+        disp('Interactively adjust proportional difference and area factor');
+        disp(' ')
+        disp('Up arrow :      More inclusive in contrast')
+        disp('Down arrow :    Less inclusive in contrast')
+        disp(' ')
+        
+        while true
+            
+            % Adjust green areas
+            for i = 1:9
+                % Find blob at cX,cY
+                [props,bwOut] = findBlobs(im{i},imMean,propDiff,'all');
+                
+                figure(f);
+                
+                subplot(3,3,i)
+                hold on
+                % Make a truecolor all-green image, make non-blobs invisible
+                clrField = cat(3, clr(1).*ones(size(im{i})), ...
+                               clr(2).*ones(size(im{i})), ...
+                               clr(3).*ones(size(im{i})));
+                h(i) = imshow(clrField,'InitialMag','fit');
+                %brighten(bLevel)
+                set(h(i), 'AlphaData', bwOut)
+                hold off
+            end
+            
+            % Interactive mode
+            [x,y,b] = ginput(1);
+            
+            % Up arrow
+            if b==30
+                propDiff = propDiff/1.25;
+                
+                % Down arrow
+            elseif b==31
+                propDiff = propDiff*1.25;
+                
+                
+            elseif isempty(b)
+                iC.propDiff(runNum,1) = propDiff;
+                break
+            end
+            
+            disp(['      propDiff = ' num2str(propDiff)])
+            
+            delete(h)
+        end
+        
+        % If first of 2 iterations
+        if strcmp(iC.expType,'pred prey') && runNum==1
+            runNum = 2;
+            
+        % Otherwise, leave
+        else
+            close(f)
+            clear frames im
+            break
+        end
+    end
+    clear b bwOut clr clrField f h i 
+end  
+
+
+%% Animal position(s)
+
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))   
     
     % First image
-    im = getFrame(vid_path,v,iC.startFrame,iC.invert,'gray',imMean);
+    im = getFrame(vid_path,v,iC.startFrame,iC.invert,'rgb');
          
     % Single body tracking -----------
     if strcmp(method,'single body') || strcmp(method,'single body, with arms') 
@@ -219,22 +376,22 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         % Initial position of predator
         disp(' ')
         disp('Select predator centroid')
-        [iC.xPd0,iC.yPd0] = imInteract(im,'points',1,bLevel);
+        [iC.x,iC.y] = imInteract(im,'points',1);
         
         % Radius for predator
         disp(' ')
         disp('Select roi radius for predator')
-        iC.rPd = imInteract(im,'radius',iC.xPd0,iC.yPd0,bLevel);
+        iC.r = imInteract(im,'radius',iC.x,iC.y);
         
         % Initial position of prey
         disp(' ')
         disp('Select prey centroid')
-        [iC.xPy0,iC.yPy0] = imInteract(im,'points',1,bLevel);
+        [iC.x(2),iC.y(2)] = imInteract(im,'points',1);
         
         % Radius for prey
         disp(' ')
         disp('Select roi radius for prey')
-        iC.rPy = imInteract(im,'radius',iC.xPy0,iC.yPy0,bLevel);
+        iC.r(2) = imInteract(im,'radius',iC.x(2),iC.y(2));
         
     end
      
@@ -250,7 +407,7 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         disp('Select tip of arms centroid')
         
         % Capture coordinates of arm tips
-        [iC.xArms,iC.yArms] = imInteract(im,'points',iC.armNum,bLevel);  
+        [iC.xArms,iC.yArms] = imInteract(im,'points',iC.armNum);  
         
         % Radius around mouth
         disp(' ')
@@ -258,13 +415,186 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         iC.rMouth = imInteract(im,'radius',iC.x,iC.y);
     end
     
+    clear im
+end
+
+
+%% Determine area range
+
+
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))    
+    
+    % Frames for plot
+    visFrames = round(linspace(iC.startFrame,iC.endFrame,9));
+    
+    % Make figure
+    f = figure;
+    
+    % Render 9 frames with current settings
+    for i = 1:9
+        % Get image, subtract around tank
+        im{i} = getFrame(vid_path,v,visFrames(i),iC.invert,'gray');
+        im{i} = applyMask(im{i},iC.xTank,iC.yTank);
+        
+        subplot(3,3,i)
+        imshow(im{i},'InitialMag','fit')
+        title(['Frame ' num2str(visFrames(i))])
+    end
+    
+    % Index for run thru loop
+    runNum = 1;
+
+    % Loop thru for each body
+    while true
+        
+        % Find blob at cX,cY
+        [propBod,bwOut] = findBlobs(im{1},imMean,propDiff,'coord advanced',...
+                                  iC.x(runNum),iC.y(runNum));
+        bodArea = propBod.Area;
+                      
+        % Default area range                    
+        minArea = bodArea/2;
+        maxArea = bodArea*2;       
+
+        disp(' ')
+        
+        if strcmp(iC.expType,'pred prey') && runNum==1
+            disp('PREDATOR ----------------------------') 
+            clr = pdClr;
+            
+        elseif strcmp(iC.expType,'pred prey')
+            disp('PREY --------------------------------')      
+            clr = pyClr;
+            
+        else
+            clr = [0 1 0];
+        end
+        
+        disp('Interactively adjust area bounds');
+        disp(' ')
+        disp('Up arrow :      Increase max area')
+        disp('Down arrow :    Decrease max area')
+        disp('Right arrow :   Increase min area')
+        disp('Left arrow :    Decrease min area')
+        disp(' ')
+        
+        while true
+            
+            % Adjust green areas
+            for i = 1:9
+                % Find blob at cX,cY
+                [props,bwOut] = findBlobs(im{i},imMean,propDiff,'all',...
+                                          minArea,maxArea);
+                
+                figure(f);
+                
+                subplot(3,3,i)
+                hold on
+                % Make a truecolor all-green image, make non-blobs invisible
+                clrField = cat(3, clr(1).*ones(size(im{i})), ...
+                                  clr(2).*ones(size(im{i})), ...
+                                  clr(3).*ones(size(im{i})));
+                h(i) = imshow(clrField,'InitialMag','fit');
+                %brighten(bLevel)
+                set(h(i), 'AlphaData', bwOut)
+                hold off
+            end
+            
+            % Interactive mode
+            [x,y,b] = ginput(1);
+            
+            % Up arrow
+            if b==30
+                maxArea = round(maxArea + 0.2*bodArea);
+                
+            % Down arrow
+            elseif b==31
+                maxArea = round(maxArea - 0.2*bodArea);
+                
+            % Left arrow
+            elseif b==28
+                minArea = round(minArea - 0.2*bodArea);
+                
+            % Right arrow
+            elseif b==29
+                minArea = round(minArea + 0.2*bodArea);
+                
+            elseif isempty(b)
+                iC.minArea(runNum,1)  = minArea;
+                iC.maxArea(runNum,1)  = maxArea;
+                break
+            end
+            
+            disp(['Body area = ' num2str(bodArea) ' min = ' num2str(minArea) '  max = ' num2str(maxArea)])
+            
+            delete(h)
+        end
+        
+        % If first of 2 iterations
+        if strcmp(iC.expType,'pred prey') && runNum==1
+            runNum = 2;
+            
+        % Otherwise, leave
+        else
+            close(f)
+            clear frames im
+            break
+        end
+    end
+    
+    clear runNum minArea maxArea h i x y b clr props bwOut visFrames
+end  
+   
+
+%% Calibration
+    
+if isempty(dir([currDataPath filesep 'Initial conditions.mat']))  
+
+    % First image
+    im = getFrame(vid_path,v,iC.startFrame,iC.invert,'rgb');
+    
+    f = figure;
+    imshow(im,'InitialMag','fit')
+    
+     ButtonName = questdlg('Are there calibration landmarks in view?', ...
+        '','Yes', 'No', 'Cancel', 'Yes');
+    
+    if strcmp(ButtonName,'Yes')
+        
+        % Calibration
+        disp(' ')
+        disp('Select two points for spatial calibration')
+        [xCal,yCal] = imInteract(im,'points',2);
+        
+        answer = inputdlg('Distance between 2 points (m)?','',1,{'0.5'});
+
+        iC.xCalPts   = xCal;
+        iC.yCalPts   = yCal;
+        iC.calconst = str2num(answer{1}) / hypot(diff(xCal),diff(yCal));
+        
+    elseif strcmp(ButtonName,'No')
+        iC.xCal = [];
+        iC.yCal = [];
+        
+    else
+        return
+    end
+    
+    clear ButtonName xCal yCal answer
+    close(f)
+    
+end
+
+  
+    
+%% Load/save initial conditions, if present    
+    
+if ~isempty(dir([currDataPath filesep 'Initial conditions.mat']))  
+    load([currDataPath filesep 'Initial conditions'])
+else
     % Save initial conditions
     save([currDataPath filesep 'Initial conditions'],'iC')
     
-    clear im
-    
-else
-    load([currDataPath filesep 'Initial conditions'])
 end
 
 
@@ -286,12 +616,14 @@ if strcmp(method,'single body') && isempty(dir([currDataPath filesep 'Body cours
     Body.ang(1)      = 0;
     
     % Save data
-    save([currDataPath filesep 'Body course'],'Body')
+    save([currDataPath filesep 'Body'],'Body')
     
-elseif isempty(dir([currDataPath filesep 'Body arm.mat']))
+elseif strcmp(method,'body arm') && ...
+        isempty(dir([currDataPath filesep 'Body arm.mat']))
       
     % Make empty Centroid structure
     Body.frames     = [iC.startFrame:iC.endFrame]';
+    Body.tform{1}   = affine2d(eye(3));
     Body.x          = nan(size(Body.frames));
     Body.y          = nan(size(Body.frames));
     Body.ang        = nan(size(Body.frames));
@@ -307,32 +639,24 @@ elseif isempty(dir([currDataPath filesep 'Body arm.mat']))
     
     % Two body tracking (i.e. predator-prey) ---
 elseif strcmp(method,'pred prey') && ...
-        isempty(dir([currDataPath filesep 'Pd Body course.mat']))
+       isempty(dir([currDataPath filesep 'Body.mat']))
     
     % Make empty Centroid structure
-    Body.frames     = [iC.startFrame:iC.endFrame]';
-    Body.tform{1}   = affine2d(eye(3));
-    Body.x          = nan(size(Body.frames));
-    Body.y          = nan(size(Body.frames));
-    Body.ang        = nan(size(Body.frames));
+    Body.frames       = [iC.startFrame:iC.endFrame]';
+    Body.tform{1,1}   = affine2d(eye(3));
+    Body.tform{1,2}   = affine2d(eye(3));
+    Body.x            = nan(length(Body.frames),2);
+    Body.y            = nan(length(Body.frames),2);
+    Body.ang          = nan(length(Body.frames),2);
     %Body.y_flip     = nan(size(Body.frames));
     
     % Initial values
-    Body.x(1)        = iC.xPd0;
-    Body.y(1)        = iC.yPd0;
-    Body.ang(1)      = 0;
+    Body.x(1,:)   = iC.x;
+    Body.y(1,:)   = iC.y;
+    Body.ang      = [0 0];
     
     % Save data
-    save([currDataPath filesep 'Pd Body course'],'Body')
-    save([currDataPath filesep 'Pd Body fine'],'Body')
-    
-    % Initial values
-    Body.x(1)        = iC.xPy0;
-    Body.y(1)        = iC.yPy0;
-    Body.ang(1)      = 0;
-    
-    save([currDataPath filesep 'Py Body course'],'Body')
-    save([currDataPath filesep 'Py Body fine'],'Body')
+    save([currDataPath filesep 'Body'],'Body')
 
 end
 
@@ -340,7 +664,7 @@ end
 
 
 
-function clipInfo = selectDuration(vidPath,v,imMean)
+function clipInfo = selectDuration(vid_path,v)
 % Interactively prompts to select a duration for analysis
 
 % Make figure
@@ -354,8 +678,11 @@ lastFrame  = v.UserData.LastFrame;
 while true
 
     % Get images
-    im1 = getFrame(vidPath,v,firstFrame,0,'gray',imMean);
-    im2 = getFrame(vidPath,v,lastFrame,0,'gray',imMean);
+    %im1 = getFrame(vid_path,v,firstFrame,0,'green screen',imMean);
+    %im1 = getFrame(vid_path,v,firstFrame,0,'rgb',imMean);
+    im1 = getFrame(vid_path,v,firstFrame,0,'rgb');
+    im2 = getFrame(vid_path,v,lastFrame,0,'rgb');
+    %im2 = getFrame(vid_path,v,lastFrame,0,'gray',imMean);
     
     % Plot candidate frames
     subplot(1,2,1)
