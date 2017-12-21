@@ -10,6 +10,9 @@ clrMode = 'gray';
 pyClr = [41 171 226]./255;
 pdClr = [241 90 36]./255;
 
+% Level to brighten the movie
+bLevel = 0.5;
+
 
 %% Create data files for analysis by kineBox
 
@@ -66,19 +69,58 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         answer = inputdlg({'How many intervals?'},'',1,{'1'}); 
         numInt = str2num(answer{1});
         
+        % Start with empty data
+        iC.man(1).start = [];
+        iC.man(1).end   = [];
+        
+        if strcmp(iC.expType,'pred prey')
+            iC.man(2).start = [];
+            iC.man(2).end   = [];
+        end
+        
         % Loop thru intervals
         for i = 1:numInt
-            
-            answer = inputdlg({'Start frame?','End frame'},...
-                              ['Interval ' num2str(i)],1,{'',''}); 
-            iC.manStart(i)  = str2num(answer{1});
-            iC.manEnd(i)    = str2num(answer{2});
+
+            if strcmp(iC.expType,'pred prey')
+                answer = inputdlg({'Start frame?','End frame','Pred (P), Prey (E), or both (PE)?'},...
+                    ['Interval ' num2str(i)],1,{'','','P'});
+                
+                % Log predator interval
+                if strcmp(answer{3},'P') || strcmp(answer{3},'p')
+                    iC.man(1).start  = [iC.man(1).start; str2num(answer{1})];
+                    iC.man(1).end    = [iC.man(1).end; str2num(answer{2})];
+                    
+                    % Log prey interval
+                elseif strcmp(answer{3},'E') || strcmp(answer{3},'e')
+                    iC.man(2).start  = [iC.man(2).start; str2num(answer{1})];
+                    iC.man(2).end    = [iC.man(2).end; str2num(answer{2})];
+                    
+                    % Log interval for both predator and prey
+                elseif strcmp(answer{3},'PE') || strcmp(answer{3},'pe')||...
+                        strcmp(answer{3},'EP') ||  strcmp(answer{3},'ep')
+                    iC.man(1).start  = [iC.man(1).start; str2num(answer{1})];
+                    iC.man(1).end    = [iC.man(1).end; str2num(answer{2})];
+                    iC.man(2).start  = [iC.man(2).start; str2num(answer{1})];
+                    iC.man(2).end    = [iC.man(2).end; str2num(answer{2})];
+                    
+                else
+                    error('Input not recognized');
+                end
+                
+            else
+                answer = inputdlg({'Start frame?','End frame'},...
+                    ['Interval ' num2str(i)],1,{'','','P'});
+                
+                % Log interval
+                iC.man(1).start  = [iC.man(1).start; str2num(answer{1})];
+                iC.man(1).end    = [iC.man(1).end; str2num(answer{2})];
+            end
         end
         
     elseif strcmp(bName,'No')
         
-        iC.manStart  = nan;
-        iC.manEnd    = nan;
+        iC.man(1).start  = nan;
+        iC.man(1).end    = nan;
     end
     
     clear bName answer
@@ -262,6 +304,8 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         title(['Frame ' num2str(visFrames(i))])
     end
     
+    brighten(bLevel)
+    
     % Index for run thru loop
     runNum = 1;
     
@@ -293,7 +337,7 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         
         while true
             
-            % Adjust green areas
+            % Adjust blob areas
             for i = 1:9
                 % Find blob at cX,cY
                 [props,bwOut] = findBlobs(im{i},imMean,propDiff,'all');
@@ -304,8 +348,8 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
                 hold on
                 % Make a truecolor all-green image, make non-blobs invisible
                 clrField = cat(3, clr(1).*ones(size(im{i})), ...
-                               clr(2).*ones(size(im{i})), ...
-                               clr(3).*ones(size(im{i})));
+                                  clr(2).*ones(size(im{i})), ...
+                                  clr(3).*ones(size(im{i})));
                 h(i) = imshow(clrField,'InitialMag','fit');
                 %brighten(bLevel)
                 set(h(i), 'AlphaData', bwOut)
@@ -441,6 +485,8 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         title(['Frame ' num2str(visFrames(i))])
     end
     
+    brighten(bLevel)
+    
     % Index for run thru loop
     runNum = 1;
 
@@ -453,8 +499,8 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
         bodArea = propBod.Area;
                       
         % Default area range                    
-        minArea = bodArea/2;
-        maxArea = bodArea*2;       
+        minArea = bodArea/4;
+        maxArea = bodArea*10;       
 
         disp(' ')
         
@@ -505,15 +551,15 @@ if isempty(dir([currDataPath filesep 'Initial conditions.mat']))
             
             % Up arrow
             if b==30
-                maxArea = round(maxArea + 0.2*bodArea);
+                maxArea = round(maxArea + 0.2*maxArea);
                 
             % Down arrow
             elseif b==31
-                maxArea = round(maxArea - 0.2*bodArea);
+                maxArea = max([1 round(maxArea - 0.2*maxArea)]);
                 
             % Left arrow
             elseif b==28
-                minArea = round(minArea - 0.2*bodArea);
+                minArea = max([1 round(minArea - 0.2*bodArea)]);
                 
             % Right arrow
             elseif b==29

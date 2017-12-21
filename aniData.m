@@ -29,6 +29,11 @@ vOut.Quality = 50;
 
 open(vOut)
 
+% Blob colors
+clrs{1} = [241 90 36]./255;
+clrs{2} = [41 171 226]./255;
+clrs{3} = [0 1 0];
+
 
 %% Parse inputs
 
@@ -75,6 +80,28 @@ elseif strcmp(opType,'Centroid tracking')
     else
         imVis = 1;
     end
+    
+elseif strcmp(opType,'center')
+       
+    Body           = varargin{1};
+    iC            = varargin{2};
+      
+    if length(varargin)>2
+        imVis = varargin{3};
+    else
+        imVis = 1;
+    end
+    
+    if length(varargin)>3
+        bLevel = varargin{4};
+    else
+        bLevel = 0.2;
+    end
+    
+    
+    idx = ~isnan(Body.x(:,1)) | ~isnan(Body.x(:,2));
+    frames = Body.frames(idx);
+    numroipts = 400;
  
 elseif strcmp(opType,'Pred + prey')
     
@@ -237,6 +264,48 @@ if ~strcmp(opType,'blobs G&L')
                 h = imshow(green,'InitialMag','fit');
                 set(h, 'AlphaData', bwG.*alphaLevel)
             end
+            
+        elseif strcmp(opType,'center')    
+            
+            % Index for current frame
+            iFrame = find(Body.frames==frames(i),1,'first');
+            
+            % Loop thru pred & prey
+            for iMode = 1:size(Body.x,2)    
+
+                % If there are points . . .
+                if ~isnan(Body.x(iFrame,iMode))
+                    
+                       % Define current roi
+                       roiCurr = giveROI('define','circular',numroipts,iC.r(iMode),...
+                                  Body.x(iFrame,iMode),Body.y(iFrame,iMode));
+                       % Render roi
+                       line(roiCurr.xPerimG,roiCurr.yPerimG,'Color',...
+                            [clrs{iMode} 0.5],'LineWidth',2);
+                end
+                
+                % If there is a blob . . 
+                if isfield(Body,'props') && ...
+                   isfield(Body.props(iFrame,iMode),'PixelIdxList') && ...
+                   ~isempty(Body.props(iFrame,iMode).PixelIdxList) && ...
+                   ~isnan(Body.props(iFrame,iMode).PixelIdxList(1)) 
+                    
+                    % Start with black image
+                    bw = im2bw(im).*0~=0;
+                    
+                     % Add white pixels for current blob
+                    bw(Body.props(iFrame,iMode).PixelIdxList) = 1;
+                    
+                    % Make a truecolor all-green image, make non-blobs invisible
+                    blob = cat(3, clrs{iMode}(1).*ones(size(im)), ...
+                                  clrs{iMode}(2).*ones(size(im)), ...
+                                  clrs{iMode}(3).*ones(size(im)));
+                    h = imshow(blob,'InitialMag','fit');
+                    set(h, 'AlphaData', bw)                  
+                end
+            end
+            
+            brighten(bLevel)
             
         elseif strcmp(opType,'blobs L simple')
             

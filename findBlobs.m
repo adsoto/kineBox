@@ -43,27 +43,29 @@ elseif strcmp(bMode,'advanced comparison')
 
      % Initial blob
     prop0 = varargin{1};
-    
-    % Last blob
-    propLast = varargin{2};
 
-    % Special action
-    if length(varargin) > 2
-        specialAction = varargin{3};
-    else
-        specialAction = [];
-    end
-    
-     % areaFactor - proportional range in area wrt last blob
-    if length(varargin) > 3
-        areaFactor = varargin{4};
-    else
-        areaFactor = 0.5;
-    end
-    
     % Previous position
-    x = propLast.Centroid(1);
-    y = propLast.Centroid(2);
+    x = varargin{2};
+    y = varargin{3};
+    
+    
+    % Special action
+    specialAction = varargin{4};
+    
+    % Area bounds
+    areaMin = varargin{5};
+    areaMax = varargin{6};
+    
+%      % areaFactor - proportional range in area wrt last blob
+%     if length(varargin) > 3
+%         
+%     else
+%         areaFactor = 0.5;
+%     end
+    
+    
+%     x = propLast.Centroid(1);
+%     y = propLast.Centroid(2);
     
     
 elseif strcmp(bMode,'area and circ')
@@ -348,8 +350,8 @@ elseif strcmp(bMode,'advanced comparison')
         for j = 1:length(props)
             
             % Include only those within area range
-            if props(j).Area > prop0.Area*areaFactor && ...
-               props(j).Area < prop0.Area*(1/areaFactor)
+            if props(j).Area > areaMin && ...
+               props(j).Area < areaMax
            
                 % Distance from last
                 dCenter(k) = hypot(x-props(j).Centroid(1),y-props(j).Centroid(2));

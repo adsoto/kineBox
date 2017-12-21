@@ -65,11 +65,15 @@ disp(' ')
 disp('COMMANDS  ------------------------------------------------ ')
 disp('    left click  : select position in current frame')
 disp('    delete      : delete current position')
-disp('    right arrow : advance video')
-disp('    left arrow  : go back in video')
+disp('    right arrow : advance one frame')
+disp('    left arrow  : go back one frame')
+disp('    up arrow    : advance five frames')
+disp('    down arrow  : go back five frames')
 disp('    1 - 9       : jump to relative position in video segment')
 disp('    +           : zoom in')
 disp('    -           : zoom out')
+disp('    d           : delete all points after current in interval')
+disp('    a           : delete all points in interval')
 disp('    q           : quit interaction mode')
 disp(' ')
  
@@ -379,6 +383,38 @@ function keyPress(fig, key, hFig, hAxes)
        
        % Update figure
        update_fig(hFig, hAxes)
+       
+     elseif strcmp(key.Key,'d') || strcmp(key.Key,'D')
+         
+         but = questdlg(['You want to delete all points after this frame?'],...
+             'ALERT!','Yes','No','Yes');
+         
+         if strcmp(but,'Yes')           
+             H.x((H.iFrame+1):end) = nan;
+             H.y((H.iFrame+1):end) = nan;
+         end
+         
+         % Store coordinate data
+         guidata(hAxes.axis1, H);
+    
+         % Update figure
+         update_fig(hFig, hAxes)
+         
+     elseif strcmp(key.Key,'a') || strcmp(key.Key,'A')
+         
+         but = questdlg(['You want to delete all points in this interval?'],...
+             'ALERT!','Yes','No','Yes');
+         
+         if strcmp(but,'Yes')           
+             H.x(:) = nan;
+             H.y(:) = nan;
+         end
+         
+         % Store coordinate data
+         guidata(hAxes.axis1, H);
+    
+         % Update figure
+         update_fig(hFig, hAxes)
          
      % The following involve changing frame number
      else
@@ -405,6 +441,26 @@ function keyPress(fig, key, hFig, hAxes)
              else
                  % Reverse frame
                  newIndex = H.iFrame-1;
+             end
+             
+         % UP ARROW
+         elseif strcmp(key.Key,'uparrow') 
+             
+             if H.iFrame+5>length(H.frames)
+                 beep
+             else
+                 % Advance frame
+                 newIndex = H.iFrame+5;
+             end
+             
+         % DOWN ARROW
+         elseif strcmp(key.Key,'downarrow')
+             
+             if H.iFrame-5<1
+                 beep
+             else
+                 % Reverse frame
+                 newIndex = H.iFrame-5;
              end
              
          % NUMBER
